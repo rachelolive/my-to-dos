@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -32,7 +32,8 @@
         import { 
           LayoutDashboard, CheckSquare, Wrench, FileText, Target, Plus, 
           Trash2, Copy, CheckCircle2, Circle, Briefcase, ExternalLink, 
-          Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo 
+          Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo,
+          Heart, BookOpen, Activity, History
         } from 'https://esm.sh/lucide-react@0.344.0';
 
         // --- CONSTANTS ---
@@ -42,6 +43,16 @@
           'Process Optimization',
           'Client Work'
         ];
+
+        // Helper to get Monday of the week for a given date
+        const getMonday = (dateString) => {
+          const date = new Date(dateString);
+          const day = date.getDay();
+          const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+          const monday = new Date(date.setDate(diff));
+          monday.setHours(0,0,0,0);
+          return monday.toISOString().split('T')[0];
+        };
 
         // Helper to load initial data from Local Storage
         const loadLocalData = (key, defaultValue) => {
@@ -64,12 +75,16 @@
           const [tools, setTools] = useState(() => loadLocalData('work_os_tools', []));
           const [notes, setNotes] = useState(() => loadLocalData('work_os_notes', []));
           const [meetings, setMeetings] = useState(() => loadLocalData('work_os_meetings', []));
+          const [teamLove, setTeamLove] = useState(() => loadLocalData('work_os_team_love', []));
+          const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
 
           // --- FORM STATES ---
           const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '' });
           const [newTool, setNewTool] = useState({ title: '', description: '', url: '', goal: '' });
           const [newNote, setNewNote] = useState('');
           const [newMeeting, setNewMeeting] = useState({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
+          const [newTeamLove, setNewTeamLove] = useState({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
+          const [newDocument, setNewDocument] = useState({ title: '', url: '', description: '' });
 
           // --- LOCAL STORAGE SYNC (Saves automatically when data changes) ---
           useEffect(() => {
@@ -87,6 +102,14 @@
           useEffect(() => {
             localStorage.setItem('work_os_meetings', JSON.stringify(meetings));
           }, [meetings]);
+
+          useEffect(() => {
+            localStorage.setItem('work_os_team_love', JSON.stringify(teamLove));
+          }, [teamLove]);
+
+          useEffect(() => {
+            localStorage.setItem('work_os_documents', JSON.stringify(documents));
+          }, [documents]);
 
           // --- DATA HANDLERS ---
           const handleAddTask = (e) => {
@@ -188,6 +211,34 @@
 
           const deleteMeeting = (id) => setMeetings(prev => prev.filter(m => m.id !== id));
 
+          const handleAddTeamLove = (e) => {
+            e.preventDefault();
+            if (!newTeamLove.message) return;
+            const item = {
+              id: Date.now().toString(),
+              ...newTeamLove,
+              dateCreated: new Date().toISOString()
+            };
+            setTeamLove(prev => [item, ...prev]);
+            setNewTeamLove({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
+          };
+
+          const deleteTeamLove = (id) => setTeamLove(prev => prev.filter(i => i.id !== id));
+
+          const handleAddDocument = (e) => {
+            e.preventDefault();
+            if (!newDocument.title) return;
+            const docItem = {
+              id: Date.now().toString(),
+              ...newDocument,
+              dateCreated: new Date().toISOString()
+            };
+            setDocuments(prev => [docItem, ...prev]);
+            setNewDocument({ title: '', url: '', description: '' });
+          };
+
+          const deleteDocument = (id) => setDocuments(prev => prev.filter(i => i.id !== id));
+
           // --- SORTED DATA FOR DISPLAY ---
           const sortedMeetings = useMemo(() => {
             return [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -225,6 +276,46 @@
               taskHours: taskHours.toFixed(1),
               remainingHours: remainingHours.toFixed(1)
             };
+          }, [meetings, tasks]);
+
+          const historicalCapacity = useMemo(() => {
+            const weeks = {};
+
+            // Process meetings
+            meetings.forEach(m => {
+              if (!m.date) return;
+              const week = getMonday(m.date);
+              if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
+              weeks[week].meetingMins += (Number(m.duration) || 0);
+            });
+
+            // Process tasks
+            tasks.forEach(t => {
+              let week;
+              if (t.status === 'Done' && t.dateCompleted) {
+                week = getMonday(t.dateCompleted);
+              } else if (t.status === 'Todo') {
+                week = getMonday(new Date()); // Pending tasks count towards current week
+              } else {
+                return;
+              }
+              
+              if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
+              weeks[week].taskMins += (Number(t.duration) || 0);
+            });
+
+            // Format, calculate hours, and sort by date descending
+            return Object.entries(weeks).map(([weekStart, data]) => {
+              const meetingHours = data.meetingMins / 60;
+              const taskHours = data.taskMins / 60;
+              const remainingHours = 40 - meetingHours - taskHours;
+              return {
+                weekStart,
+                meetingHours: meetingHours.toFixed(1),
+                taskHours: taskHours.toFixed(1),
+                remainingHours: remainingHours.toFixed(1)
+              };
+            }).sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
           }, [meetings, tasks]);
 
           const meetingStats = useMemo(() => {
@@ -312,6 +403,35 @@
                   </span>
                 </div>
               </div>
+
+              {/* Historical Capacity Card */}
+              {historicalCapacity.length > 0 && (
+                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
+                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                    <History size={20} className="text-slate-500" /> Capacity History
+                  </h3>
+                  <div className="space-y-5">
+                    {historicalCapacity.map((week, idx) => (
+                      <div key={week.weekStart} className={`${idx !== 0 ? 'pt-5 border-t border-gray-100' : ''}`}>
+                        <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
+                          <span>Week of {new Date(week.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {idx === 0 ? '(Current)' : ''}</span>
+                          <span className={`${week.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                            {week.remainingHours}h remaining
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
+                          <div className="bg-indigo-500 h-2 transition-all" style={{ width: `${(week.meetingHours / 40) * 100}%` }} title="Meetings"></div>
+                          <div className="bg-blue-500 h-2 transition-all" style={{ width: `${(week.taskHours / 40) * 100}%` }} title="Tasks"></div>
+                        </div>
+                        <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> {week.meetingHours}h Meetings</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {week.taskHours}h Tasks</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {tools.length > 0 && (
                 <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
@@ -739,6 +859,128 @@
             </div>
           );
 
+          const renderTeamLove = () => (
+            <div className="space-y-6 animate-in">
+              <form onSubmit={handleAddTeamLove} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input 
+                    type="date" 
+                    className="p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-gray-700 bg-white"
+                    value={newTeamLove.date}
+                    onChange={e => setNewTeamLove({...newTeamLove, date: e.target.value})}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Who sent the love? (Optional)" 
+                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                    value={newTeamLove.sender}
+                    onChange={e => setNewTeamLove({...newTeamLove, sender: e.target.value})}
+                  />
+                </div>
+                <textarea 
+                  placeholder="Paste the nice words here..." 
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none h-24 text-gray-700"
+                  value={newTeamLove.message}
+                  onChange={e => setNewTeamLove({...newTeamLove, message: e.target.value})}
+                />
+                <div className="flex justify-end">
+                  <button type="submit" className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
+                    <Heart size={18} /> Save Team Love
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {teamLove.length === 0 && (
+                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
+                    No team love recorded yet. Keep up the great work!
+                  </div>
+                )}
+                {teamLove.sort((a,b) => new Date(b.date) - new Date(a.date)).map(love => (
+                  <div key={love.id} className="bg-rose-50 p-5 rounded-xl border border-rose-100 shadow-sm group relative">
+                    <button onClick={() => deleteTeamLove(love.id)} className="absolute top-3 right-3 text-rose-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={16} />
+                    </button>
+                    <Heart size={20} className="text-rose-400 mb-3" fill="currentColor" />
+                    <p className="text-gray-800 whitespace-pre-wrap pr-4 text-sm italic">"{love.message}"</p>
+                    <div className="mt-4 pt-3 border-t border-rose-200/50 flex justify-between items-center text-xs text-rose-700/70 font-medium">
+                      <span>{love.sender ? `- ${love.sender}` : 'Anonymous'}</span>
+                      <span>{new Date(love.date).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+          const renderDocuments = () => (
+            <div className="space-y-6 animate-in">
+              <form onSubmit={handleAddDocument} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input 
+                    type="text" 
+                    placeholder="Document Title" 
+                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+                    value={newDocument.title}
+                    onChange={e => setNewDocument({...newDocument, title: e.target.value})}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Document URL (link to Google Doc, Notion, etc)" 
+                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+                    value={newDocument.url}
+                    onChange={e => setNewDocument({...newDocument, url: e.target.value})}
+                  />
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Short description or context (optional)" 
+                  className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 text-sm"
+                  value={newDocument.description}
+                  onChange={e => setNewDocument({...newDocument, description: e.target.value})}
+                />
+                <div className="flex justify-end">
+                  <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
+                    <BookOpen size={18} /> Add Document
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {documents.length === 0 && (
+                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
+                    No important documents saved yet.
+                  </div>
+                )}
+                {documents.map(doc => (
+                  <div key={doc.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col group relative">
+                    <button onClick={() => deleteDocument(doc.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={16} />
+                    </button>
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-cyan-50 text-cyan-600 rounded-lg"><BookOpen size={18} /></div>
+                      <h4 className="font-bold text-gray-800 pr-6 truncate">{doc.title}</h4>
+                    </div>
+                    {doc.description && <p className="text-gray-600 text-sm mb-4 flex-1">{doc.description}</p>}
+                    
+                    <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-end">
+                      {doc.url && (
+                        <a 
+                          href={doc.url.startsWith('http') ? doc.url : `https://${doc.url}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-cyan-600 hover:text-cyan-800 text-sm font-medium flex items-center gap-1"
+                        >
+                          Open Document <ExternalLink size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
           return (
             <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
               <aside className="w-full md:w-64 bg-white border-r border-gray-200 md:min-h-screen flex flex-col">
@@ -753,8 +995,10 @@
                     { id: 'dashboard', label: 'Dashboard & Summary', icon: LayoutDashboard },
                     { id: 'tasks', label: 'Tasks & To-dos', icon: CheckSquare },
                     { id: 'meetings', label: 'Meetings & Time', icon: Clock },
+                    { id: 'documents', label: 'Important Docs', icon: BookOpen },
                     { id: 'tools', label: 'Tool Portfolio', icon: Wrench },
                     { id: 'notes', label: 'Information Log', icon: FileText },
+                    { id: 'team-love', label: 'Team Love', icon: Heart },
                   ].map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -785,16 +1029,20 @@
                     {activeTab === 'dashboard' && "Overview and automated weekly reporting."}
                     {activeTab === 'tasks' && "Manage your actionable items and link them to goals."}
                     {activeTab === 'meetings' && "Log meetings to track where your time goes."}
+                    {activeTab === 'documents' && "Quick access to your most important files and links."}
                     {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
                     {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
+                    {activeTab === 'team-love' && "A record of positive feedback and shoutouts."}
                   </p>
                 </header>
 
                 {activeTab === 'dashboard' && renderDashboard()}
                 {activeTab === 'tasks' && renderTasks()}
                 {activeTab === 'meetings' && renderMeetings()}
+                {activeTab === 'documents' && renderDocuments()}
                 {activeTab === 'tools' && renderTools()}
                 {activeTab === 'notes' && renderNotes()}
+                {activeTab === 'team-love' && renderTeamLove()}
                 
               </main>
         </div>
