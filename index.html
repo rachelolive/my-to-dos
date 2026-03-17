@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -33,7 +33,7 @@
           LayoutDashboard, CheckSquare, Wrench, FileText, Target, Plus, 
           Trash2, Copy, CheckCircle2, Circle, Briefcase, ExternalLink, 
           Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo,
-          Heart, BookOpen, Activity, History
+          Heart, BookOpen, Activity, History, Edit3
         } from 'https://esm.sh/lucide-react@0.344.0';
 
         // --- CONSTANTS ---
@@ -41,7 +41,8 @@
           'New Business',
           'Retention',
           'Process Optimization',
-          'Client Work'
+          'Client Work',
+          'People Management'
         ];
 
         // Helper to get Monday of the week for a given date
@@ -85,6 +86,10 @@
           const [newMeeting, setNewMeeting] = useState({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
           const [newTeamLove, setNewTeamLove] = useState({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
           const [newDocument, setNewDocument] = useState({ title: '', url: '', description: '' });
+
+          // State for editing an existing meeting
+          const [editingMeetingId, setEditingMeetingId] = useState(null);
+          const [editMeetingForm, setEditMeetingForm] = useState({ notes: '', actionItems: '' });
 
           // --- LOCAL STORAGE SYNC (Saves automatically when data changes) ---
           useEffect(() => {
@@ -211,6 +216,42 @@
 
           const deleteMeeting = (id) => setMeetings(prev => prev.filter(m => m.id !== id));
 
+          const startEditingMeeting = (meeting) => {
+            setEditingMeetingId(meeting.id);
+            setEditMeetingForm({ notes: meeting.notes || '', actionItems: '' });
+          };
+
+          const saveMeetingEdits = (id) => {
+            const meeting = meetings.find(m => m.id === id);
+            if (!meeting) return;
+
+            const actions = editMeetingForm.actionItems.split('\n').map(a => a.trim()).filter(a => a.length > 0);
+            
+            if (actions.length > 0) {
+              const generatedTasks = actions.map((action, idx) => ({
+                id: Date.now().toString() + '-' + idx,
+                title: action,
+                status: 'Todo',
+                goal: '',
+                priority: 'Medium',
+                duration: 15,
+                dateCreated: new Date().toISOString(),
+                dateCompleted: null
+              }));
+              setTasks(prev => [...generatedTasks, ...prev]);
+            }
+
+            const updatedMeeting = {
+              ...meeting,
+              notes: editMeetingForm.notes,
+              actionItems: [...(meeting.actionItems || []), ...actions]
+            };
+
+            setMeetings(prev => prev.map(m => m.id === id ? updatedMeeting : m));
+            setEditingMeetingId(null);
+            setEditMeetingForm({ notes: '', actionItems: '' });
+          };
+
           const handleAddTeamLove = (e) => {
             e.preventDefault();
             if (!newTeamLove.message) return;
@@ -246,7 +287,6 @@
 
           // --- DERIVED STATS & CAPACITY SUMMARY ---
           const capacityStats = useMemo(() => {
-            // Calculate for the current work week (Monday - Sunday)
             const now = new Date();
             const dayOfWeek = now.getDay();
             const distanceToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -264,11 +304,19 @@
             });
             
             const meetingMins = thisWeekMeetings.reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
-            const pendingTaskMins = tasks.filter(t => t.status === 'Todo').reduce((acc, t) => acc + (Number(t.duration) || 0), 0);
+            
+            const thisWeekTaskMins = tasks.filter(t => {
+              if (t.status === 'Todo') return true;
+              if (t.status === 'Done' && t.dateCompleted) {
+                const cDate = new Date(t.dateCompleted);
+                return cDate >= monday && cDate <= sunday;
+              }
+              return false;
+            }).reduce((acc, t) => acc + (Number(t.duration) || 0), 0);
 
             const totalCapacityHours = 40;
             const meetingHours = meetingMins / 60;
-            const taskHours = pendingTaskMins / 60;
+            const taskHours = thisWeekTaskMins / 60;
             const remainingHours = totalCapacityHours - meetingHours - taskHours;
 
             return {
@@ -281,7 +329,6 @@
           const historicalCapacity = useMemo(() => {
             const weeks = {};
 
-            // Process meetings
             meetings.forEach(m => {
               if (!m.date) return;
               const week = getMonday(m.date);
@@ -289,13 +336,12 @@
               weeks[week].meetingMins += (Number(m.duration) || 0);
             });
 
-            // Process tasks
             tasks.forEach(t => {
               let week;
               if (t.status === 'Done' && t.dateCompleted) {
                 week = getMonday(t.dateCompleted);
               } else if (t.status === 'Todo') {
-                week = getMonday(new Date()); // Pending tasks count towards current week
+                week = getMonday(new Date()); 
               } else {
                 return;
               }
@@ -304,7 +350,6 @@
               weeks[week].taskMins += (Number(t.duration) || 0);
             });
 
-            // Format, calculate hours, and sort by date descending
             return Object.entries(weeks).map(([weekStart, data]) => {
               const meetingHours = data.meetingMins / 60;
               const taskHours = data.taskMins / 60;
@@ -317,6 +362,35 @@
               };
             }).sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
           }, [meetings, tasks]);
+
+          const goalStats = useMemo(() => {
+            const stats = STRATEGIC_GOALS.reduce((acc, goal) => {
+                acc[goal] = { spent: 0, planned: 0, count: 0 };
+                return acc;
+            }, {});
+            stats['Unassigned'] = { spent: 0, planned: 0, count: 0 };
+
+            tasks.forEach(t => {
+                const goalKey = t.goal || 'Unassigned';
+                if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
+                
+                stats[goalKey].count += 1;
+                if (t.status === 'Done') {
+                    stats[goalKey].spent += (Number(t.duration) || 0);
+                } else {
+                    stats[goalKey].planned += (Number(t.duration) || 0);
+                }
+            });
+
+            return Object.entries(stats).map(([goal, data]) => ({
+                goal,
+                spentHours: (data.spent / 60).toFixed(1),
+                plannedHours: (data.planned / 60).toFixed(1),
+                totalHours: ((data.spent + data.planned) / 60).toFixed(1),
+                count: data.count
+            })).filter(g => g.count > 0 || g.goal !== 'Unassigned')
+               .sort((a, b) => Number(b.totalHours) - Number(a.totalHours));
+          }, [tasks]);
 
           const meetingStats = useMemo(() => {
             if (meetings.length === 0) return { totalHours: 0, avgWeeklyHours: 0, percentOfWeek: 0 };
@@ -403,35 +477,6 @@
                   </span>
                 </div>
               </div>
-
-              {/* Historical Capacity Card */}
-              {historicalCapacity.length > 0 && (
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
-                    <History size={20} className="text-slate-500" /> Capacity History
-                  </h3>
-                  <div className="space-y-5">
-                    {historicalCapacity.map((week, idx) => (
-                      <div key={week.weekStart} className={`${idx !== 0 ? 'pt-5 border-t border-gray-100' : ''}`}>
-                        <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
-                          <span>Week of {new Date(week.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {idx === 0 ? '(Current)' : ''}</span>
-                          <span className={`${week.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                            {week.remainingHours}h remaining
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
-                          <div className="bg-indigo-500 h-2 transition-all" style={{ width: `${(week.meetingHours / 40) * 100}%` }} title="Meetings"></div>
-                          <div className="bg-blue-500 h-2 transition-all" style={{ width: `${(week.taskHours / 40) * 100}%` }} title="Tasks"></div>
-                        </div>
-                        <div className="flex gap-4 text-xs text-gray-500 font-medium">
-                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> {week.meetingHours}h Meetings</span>
-                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {week.taskHours}h Tasks</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {tools.length > 0 && (
                 <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
@@ -620,6 +665,221 @@
             </div>
           );
 
+          const renderMeetings = () => (
+            <div className="space-y-6 animate-in">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                  <h3 className="text-indigo-900 font-bold text-lg mb-1">Time Spent in Meetings</h3>
+                  <p className="text-indigo-700/80 text-sm">Logging your meetings helps calculate your weekly time sink based on a standard 40-hour work week.</p>
+                </div>
+                <div className="flex gap-6">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.totalHours}h</p>
+                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Total Time</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.avgWeeklyHours}h</p>
+                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Weekly Avg</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.percentOfWeek}%</p>
+                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Of 40h Week</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleAddMeeting} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input 
+                    type="text" 
+                    placeholder="Meeting Topic / Title" 
+                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    value={newMeeting.title}
+                    onChange={e => setNewMeeting({...newMeeting, title: e.target.value})}
+                  />
+                  <input 
+                    type="date" 
+                    className="p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-700 bg-white"
+                    value={newMeeting.date}
+                    onChange={e => setNewMeeting({...newMeeting, date: e.target.value})}
+                  />
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      placeholder="Duration" 
+                      className="w-32 p-2 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={newMeeting.duration}
+                      onChange={e => setNewMeeting({...newMeeting, duration: e.target.value})}
+                    />
+                    <span className="absolute right-3 top-2.5 text-gray-400 text-sm">min</span>
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
+                    <Plus size={18} /> Quick Log
+                  </button>
+                </div>
+              </form>
+
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600 flex items-center gap-2">
+                  <CalendarDays size={18} /> Meeting Log
+                </div>
+                <ul className="divide-y divide-gray-100">
+                  {sortedMeetings.length === 0 && (
+                    <li className="p-6 text-center text-gray-400">No meetings logged yet.</li>
+                  )}
+                  {sortedMeetings.map(meeting => {
+                    const isEditing = editingMeetingId === meeting.id;
+                    return (
+                      <li key={meeting.id} className="p-4 flex flex-col hover:bg-gray-50 transition-colors group">
+                        <div className="flex items-center justify-between w-full">
+                          <div>
+                            <p className="text-gray-800 font-medium">{meeting.title}</p>
+                            <p className="text-xs text-gray-500 mt-1">{new Date(meeting.date).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="font-mono text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-md hidden md:inline-block">
+                              {meeting.duration} min
+                            </span>
+                            <button 
+                              onClick={() => isEditing ? setEditingMeetingId(null) : startEditingMeeting(meeting)} 
+                              className="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded hover:bg-indigo-100 transition-colors text-sm font-medium flex items-center gap-2"
+                            >
+                              <Edit3 size={14} /> {isEditing ? 'Cancel' : 'Edit Notes & Actions'}
+                            </button>
+                            <button onClick={() => deleteMeeting(meeting.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Edit Mode */}
+                        {isEditing && (
+                          <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in">
+                            <textarea 
+                              placeholder="Meeting Notes..." 
+                              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-20 text-sm"
+                              value={editMeetingForm.notes}
+                              onChange={e => setEditMeetingForm({...editMeetingForm, notes: e.target.value})}
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-gray-500 uppercase mb-2">Add New Action Items (Will send to To-Do List)</p>
+                              <textarea 
+                                placeholder="Enter 1 action item per line..." 
+                                className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-20 text-sm"
+                                value={editMeetingForm.actionItems}
+                                onChange={e => setEditMeetingForm({...editMeetingForm, actionItems: e.target.value})}
+                              />
+                            </div>
+                            <div className="flex justify-end">
+                              <button onClick={() => saveMeetingEdits(meeting.id)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors">
+                                Save Changes
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* View Mode (Only show if there are notes or actions) */}
+                        {!isEditing && (meeting.notes || (meeting.actionItems && meeting.actionItems.length > 0)) && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {meeting.notes && (
+                              <div>
+                                <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><AlignLeft size={12}/> Notes</p>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{meeting.notes}</p>
+                              </div>
+                            )}
+                            {meeting.actionItems && meeting.actionItems.length > 0 && (
+                              <div>
+                                <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><ListTodo size={12}/> Actions Triggered</p>
+                                <ul className="list-disc pl-4 text-sm text-gray-700 space-y-1">
+                                  {meeting.actionItems.map((item, i) => <li key={i}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          );
+
+          const renderInsights = () => (
+            <div className="space-y-6 animate-in">
+              
+              {/* Strategic Goal Time Breakdown */}
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <Target size={20} className="text-indigo-500" /> Time by Strategic Goal
+                </h3>
+                {goalStats.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm bg-gray-50 rounded-lg border border-gray-100 border-dashed">
+                    Assign durations and goals to your tasks to see insights here!
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {goalStats.map(stat => {
+                      const total = Math.max(Number(stat.totalHours), 0.1); // Prevent division by zero
+                      const spentPct = (Number(stat.spentHours) / total) * 100;
+                      const plannedPct = (Number(stat.plannedHours) / total) * 100;
+                      
+                      return (
+                        <div key={stat.goal}>
+                          <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
+                            <span>{stat.goal} <span className="text-gray-400 font-normal">({stat.count} tasks)</span></span>
+                            <span>{stat.totalHours}h Total</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
+                            <div className="bg-emerald-500 h-2 transition-all" style={{width: `${spentPct}%`}} title="Time Spent (Done)"></div>
+                            <div className="bg-blue-400 h-2 transition-all" style={{width: `${plannedPct}%`}} title="Time Planned (Todo)"></div>
+                          </div>
+                          <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> {stat.spentHours}h Spent</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400"></span> {stat.plannedHours}h Planned</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Historical Capacity Card */}
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                  <History size={20} className="text-slate-500" /> Weekly Capacity History
+                </h3>
+                {historicalCapacity.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                    No capacity data recorded yet.
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {historicalCapacity.map((week, idx) => (
+                      <div key={week.weekStart} className={`${idx !== 0 ? 'pt-5 border-t border-gray-100' : ''}`}>
+                        <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
+                          <span>Week of {new Date(week.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {idx === 0 ? '(Current)' : ''}</span>
+                          <span className={`${week.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                            {week.remainingHours}h remaining
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
+                          <div className="bg-indigo-500 h-2 transition-all" style={{ width: `${(week.meetingHours / 40) * 100}%` }} title="Meetings"></div>
+                          <div className="bg-blue-500 h-2 transition-all" style={{ width: `${(week.taskHours / 40) * 100}%` }} title="Tasks"></div>
+                        </div>
+                        <div className="flex gap-4 text-xs text-gray-500 font-medium">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> {week.meetingHours}h Meetings</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {week.taskHours}h Tasks</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+
           const renderTools = () => (
             <div className="space-y-6 animate-in">
               <form onSubmit={handleAddTool} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
@@ -694,164 +954,6 @@
                           Open <ExternalLink size={14} />
                         </a>
                       )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-
-          const renderMeetings = () => (
-            <div className="space-y-6 animate-in">
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <h3 className="text-indigo-900 font-bold text-lg mb-1">Time Spent in Meetings</h3>
-                  <p className="text-indigo-700/80 text-sm">Logging your meetings helps calculate your weekly time sink based on a standard 40-hour work week.</p>
-                </div>
-                <div className="flex gap-6">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.totalHours}h</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Total Time</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.avgWeeklyHours}h</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Weekly Avg</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.percentOfWeek}%</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Of 40h Week</p>
-                  </div>
-                </div>
-              </div>
-
-              <form onSubmit={handleAddMeeting} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Meeting Topic / Title" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={newMeeting.title}
-                    onChange={e => setNewMeeting({...newMeeting, title: e.target.value})}
-                  />
-                  <input 
-                    type="date" 
-                    className="p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-700 bg-white"
-                    value={newMeeting.date}
-                    onChange={e => setNewMeeting({...newMeeting, date: e.target.value})}
-                  />
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      placeholder="Duration" 
-                      className="w-32 p-2 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                      value={newMeeting.duration}
-                      onChange={e => setNewMeeting({...newMeeting, duration: e.target.value})}
-                    />
-                    <span className="absolute right-3 top-2.5 text-gray-400 text-sm">min</span>
-                  </div>
-                </div>
-                
-                <textarea 
-                  placeholder="Meeting Notes..." 
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-16 text-sm"
-                  value={newMeeting.notes}
-                  onChange={e => setNewMeeting({...newMeeting, notes: e.target.value})}
-                />
-                <textarea 
-                  placeholder="Action Items (Enter 1 per line to automatically add to To-Dos)" 
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-16 text-sm"
-                  value={newMeeting.actionItems}
-                  onChange={e => setNewMeeting({...newMeeting, actionItems: e.target.value})}
-                />
-                
-                <div className="flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-                    <Plus size={18} /> Log Meeting & Tasks
-                  </button>
-                </div>
-              </form>
-
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600 flex items-center gap-2">
-                  <CalendarDays size={18} /> Meeting Log
-                </div>
-                <ul className="divide-y divide-gray-100">
-                  {sortedMeetings.length === 0 && (
-                    <li className="p-6 text-center text-gray-400">No meetings logged yet.</li>
-                  )}
-                  {sortedMeetings.map(meeting => (
-                    <li key={meeting.id} className="p-4 flex flex-col hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center justify-between w-full">
-                        <div>
-                          <p className="text-gray-800 font-medium">{meeting.title}</p>
-                          <p className="text-xs text-gray-500 mt-1">{new Date(meeting.date).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-mono text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-md">
-                            {meeting.duration} min
-                          </span>
-                          <button onClick={() => deleteMeeting(meeting.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Sub-content for Notes and Action Items */}
-                      {(meeting.notes || (meeting.actionItems && meeting.actionItems.length > 0)) && (
-                        <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {meeting.notes && (
-                            <div>
-                              <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><AlignLeft size={12}/> Notes</p>
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{meeting.notes}</p>
-                            </div>
-                          )}
-                          {meeting.actionItems && meeting.actionItems.length > 0 && (
-                            <div>
-                              <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><ListTodo size={12}/> Action Items (Sent to To-Do)</p>
-                              <ul className="list-disc pl-4 text-sm text-gray-700">
-                                {meeting.actionItems.map((item, i) => <li key={i}>{item}</li>)}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          );
-
-          const renderNotes = () => (
-            <div className="space-y-6 animate-in">
-              <form onSubmit={handleAddNote} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <textarea 
-                  placeholder="Jot down quick information, ideas, or links..." 
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none h-24 text-gray-700"
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                />
-                <div className="flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
-                    <Plus size={18} /> Save Note
-                  </button>
-                </div>
-              </form>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {notes.length === 0 && (
-                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
-                    No notes yet.
-                  </div>
-                )}
-                {notes.map(note => (
-                  <div key={note.id} className="bg-[#fffdf2] p-5 rounded-xl border border-amber-100 shadow-sm group relative">
-                    <button onClick={() => deleteNote(note.id)} className="absolute top-3 right-3 text-amber-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={16} />
-                    </button>
-                    <p className="text-gray-800 whitespace-pre-wrap pr-4 text-sm">{note.content}</p>
-                    <div className="mt-4 pt-3 border-t border-amber-200/50 text-xs text-amber-600/60 font-medium">
-                      {new Date(note.dateCreated).toLocaleDateString()}
                     </div>
                   </div>
                 ))}
@@ -981,6 +1083,43 @@
             </div>
           );
 
+          const renderNotes = () => (
+            <div className="space-y-6 animate-in">
+              <form onSubmit={handleAddNote} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <textarea 
+                  placeholder="Jot down quick information, ideas, or links..." 
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none h-24 text-gray-700"
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                />
+                <div className="flex justify-end">
+                  <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
+                    <Plus size={18} /> Save Note
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {notes.length === 0 && (
+                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
+                    No notes yet.
+                  </div>
+                )}
+                {notes.map(note => (
+                  <div key={note.id} className="bg-[#fffdf2] p-5 rounded-xl border border-amber-100 shadow-sm group relative">
+                    <button onClick={() => deleteNote(note.id)} className="absolute top-3 right-3 text-amber-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={16} />
+                    </button>
+                    <p className="text-gray-800 whitespace-pre-wrap pr-4 text-sm">{note.content}</p>
+                    <div className="mt-4 pt-3 border-t border-amber-200/50 text-xs text-amber-600/60 font-medium">
+                      {new Date(note.dateCreated).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
           return (
             <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
               <aside className="w-full md:w-64 bg-white border-r border-gray-200 md:min-h-screen flex flex-col">
@@ -995,6 +1134,7 @@
                     { id: 'dashboard', label: 'Dashboard & Summary', icon: LayoutDashboard },
                     { id: 'tasks', label: 'Tasks & To-dos', icon: CheckSquare },
                     { id: 'meetings', label: 'Meetings & Time', icon: Clock },
+                    { id: 'insights', label: 'Insights & Capacity', icon: Activity },
                     { id: 'documents', label: 'Important Docs', icon: BookOpen },
                     { id: 'tools', label: 'Tool Portfolio', icon: Wrench },
                     { id: 'notes', label: 'Information Log', icon: FileText },
@@ -1029,6 +1169,7 @@
                     {activeTab === 'dashboard' && "Overview and automated weekly reporting."}
                     {activeTab === 'tasks' && "Manage your actionable items and link them to goals."}
                     {activeTab === 'meetings' && "Log meetings to track where your time goes."}
+                    {activeTab === 'insights' && "Review your workload distribution and capacity history."}
                     {activeTab === 'documents' && "Quick access to your most important files and links."}
                     {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
                     {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
@@ -1039,18 +1180,19 @@
                 {activeTab === 'dashboard' && renderDashboard()}
                 {activeTab === 'tasks' && renderTasks()}
                 {activeTab === 'meetings' && renderMeetings()}
+                {activeTab === 'insights' && renderInsights()}
                 {activeTab === 'documents' && renderDocuments()}
                 {activeTab === 'tools' && renderTools()}
                 {activeTab === 'notes' && renderNotes()}
                 {activeTab === 'team-love' && renderTeamLove()}
                 
               </main>
-        </div>
-      );
-    }
+            </div>
+          );
+        }
 
-    const root = createRoot(document.getElementById('root'));
-    root.render(<App />);
-</script>
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
