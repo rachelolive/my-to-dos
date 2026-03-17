@@ -34,10 +34,10 @@
           Trash2, Copy, CheckCircle2, Circle, Briefcase, ExternalLink, 
           Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo,
           Heart, BookOpen, Activity, History, Edit3, Users
-        } from 'https://esm.sh/lucide-react@0.344.0';
+        } from 'https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0';
         import {
           LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-        } from 'https://esm.sh/recharts@2.12.2';
+        } from 'https://esm.sh/recharts@2.12.2?deps=react@18.2.0,react-dom@18.2.0';
 
         // --- CONSTANTS ---
         const STRATEGIC_GOALS = [
@@ -62,7 +62,9 @@
 
         // Helper to get Monday of the week for a given date
         const getMonday = (dateString) => {
+          if (!dateString) return null;
           const date = new Date(dateString);
+          if (isNaN(date.getTime())) return null; // Safety check for invalid dates
           const day = date.getDay();
           const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
           const monday = new Date(date.setDate(diff));
@@ -320,7 +322,9 @@
             sunday.setHours(23, 59, 59, 999);
 
             const thisWeekMeetings = meetings.filter(m => {
+              if (!m.date) return false;
               const mDate = new Date(m.date);
+              if (isNaN(mDate.getTime())) return false;
               return mDate >= monday && mDate <= sunday;
             });
             
@@ -336,11 +340,12 @@
               if (t.status === 'Todo') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
+                if (isNaN(cDate.getTime())) return false;
                 return cDate >= monday && cDate <= sunday;
               }
               return false;
             }).forEach(t => {
-              const goalKey = t.goal || 'Unassigned';
+              const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
               const mins = Number(t.duration) || 0;
               tasksByGoal[goalKey] += mins;
               totalTaskMins += mins;
@@ -381,6 +386,7 @@
               if (t.status === 'Todo') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
+                if (isNaN(cDate.getTime())) return false;
                 return cDate >= monday && cDate <= sunday;
               }
               return false;
@@ -400,8 +406,8 @@
             const weeks = {};
 
             meetings.forEach(m => {
-              if (!m.date) return;
               const week = getMonday(m.date);
+              if (!week) return;
               if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
               weeks[week].meetingMins += (Number(m.duration) || 0);
             });
@@ -411,11 +417,10 @@
               if (t.status === 'Done' && t.dateCompleted) {
                 week = getMonday(t.dateCompleted);
               } else if (t.status === 'Todo') {
-                week = getMonday(new Date()); 
-              } else {
-                return;
+                week = getMonday(new Date().toISOString()); 
               }
               
+              if (!week) return;
               if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
               weeks[week].taskMins += (Number(t.duration) || 0);
             });
@@ -437,13 +442,15 @@
             const weeks = {};
             myTasks.filter(t => t.status === 'Done' && t.dateCompleted).forEach(t => {
                const week = getMonday(t.dateCompleted);
+               if (!week) return;
+               
                if (!weeks[week]) {
                    weeks[week] = { weekStart: week };
                    STRATEGIC_GOALS.forEach(g => weeks[week][g] = 0);
                    weeks[week]['Unassigned'] = 0;
                }
-               const goal = t.goal || 'Unassigned';
-               weeks[week][goal] += (Number(t.duration) || 0) / 60;
+               const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
+               weeks[week][goalKey] += (Number(t.duration) || 0) / 60;
             });
             
             return Object.values(weeks)
@@ -471,7 +478,7 @@
             let totalAllSpentMins = 0;
 
             myTasks.forEach(t => {
-                const goalKey = t.goal || 'Unassigned';
+                const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
                 if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
                 
                 stats[goalKey].count += 1;
