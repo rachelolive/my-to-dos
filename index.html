@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Work Tracker & Summary Dashboard</title>
     
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Load Babel to translate JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* Small fix for fade-in animation since we don't have tailwind-animate plugin loaded */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -20,20 +17,36 @@
         .animate-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
+        /* Custom scrollbar for kanban */
+        .kanban-scroll::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .kanban-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
-    <!-- This script tag type="text/babel" tells Babel to translate our React code -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
         import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
         import { 
           LayoutDashboard, CheckSquare, Wrench, FileText, Target, Plus, 
-          Trash2, Copy, CheckCircle2, Circle, Briefcase, ExternalLink, 
-          Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo,
-          Heart, BookOpen, Activity, History, Edit3, Users
+          Trash2, Copy, Briefcase, ExternalLink, Clock, PieChart, CalendarDays, 
+          Flag, Battery, AlignLeft, ListTodo, Heart, BookOpen, Activity, 
+          History, Edit3, Users, Settings, Download, Upload, KanbanSquare, 
+          List, Repeat, Award
         } from 'https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0';
         import {
           LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -50,45 +63,42 @@
         ];
 
         const GOAL_COLORS = {
-          'New Business': '#3b82f6', // blue-500
-          'Retention': '#10b981', // emerald-500
-          'Process Optimization': '#f59e0b', // amber-500
-          'Client Work': '#8b5cf6', // violet-500
-          'People Management': '#ec4899', // pink-500
-          'Admin Work': '#64748b', // slate-500
-          'Unassigned': '#9ca3af', // gray-400
-          'Meetings': '#6366f1' // indigo-500
+          'New Business': '#3b82f6', 
+          'Retention': '#10b981', 
+          'Process Optimization': '#f59e0b', 
+          'Client Work': '#8b5cf6', 
+          'People Management': '#ec4899', 
+          'Admin Work': '#64748b', 
+          'Unassigned': '#9ca3af', 
+          'Meetings': '#6366f1' 
         };
 
-        // Helper to get Monday of the week for a given date
+        const TASK_STATUSES = ['Todo', 'In Progress', 'Blocked', 'Done'];
+
         const getMonday = (dateString) => {
           if (!dateString) return null;
           const date = new Date(dateString);
-          if (isNaN(date.getTime())) return null; // Safety check for invalid dates
+          if (isNaN(date.getTime())) return null;
           const day = date.getDay();
-          const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+          const diff = date.getDate() - day + (day === 0 ? -6 : 1);
           const monday = new Date(date.setDate(diff));
           monday.setHours(0,0,0,0);
           return monday.toISOString().split('T')[0];
         };
 
-        // Helper to load initial data from Local Storage
         const loadLocalData = (key, defaultValue) => {
           try {
             const saved = localStorage.getItem(key);
-            if (saved) {
-              return JSON.parse(saved);
-            }
-          } catch (e) {
-            console.error(`Error loading ${key} from local storage`, e);
-          }
+            if (saved) return JSON.parse(saved);
+          } catch (e) { console.error(`Error loading ${key}`, e); }
           return defaultValue;
         };
 
         function App() {
           const [activeTab, setActiveTab] = useState('dashboard');
+          const [taskView, setTaskView] = useState('list'); // 'list' or 'kanban'
           
-          // --- APP STATE (Initialized from Local Storage) ---
+          // --- APP STATE ---
           const [tasks, setTasks] = useState(() => loadLocalData('work_os_tasks', []));
           const [tools, setTools] = useState(() => loadLocalData('work_os_tools', []));
           const [notes, setNotes] = useState(() => loadLocalData('work_os_notes', []));
@@ -97,41 +107,22 @@
           const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
 
           // --- FORM STATES ---
-          const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me' });
+          const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me', recurrence: 'None' });
           const [newTool, setNewTool] = useState({ title: '', description: '', url: '', goal: '' });
           const [newNote, setNewNote] = useState('');
           const [newMeeting, setNewMeeting] = useState({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
           const [newTeamLove, setNewTeamLove] = useState({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
           const [newDocument, setNewDocument] = useState({ title: '', url: '', description: '' });
-
-          // State for editing an existing meeting
           const [editingMeetingId, setEditingMeetingId] = useState(null);
           const [editMeetingForm, setEditMeetingForm] = useState({ notes: '', actionItems: '' });
 
-          // --- LOCAL STORAGE SYNC (Saves automatically when data changes) ---
-          useEffect(() => {
-            localStorage.setItem('work_os_tasks', JSON.stringify(tasks));
-          }, [tasks]);
-
-          useEffect(() => {
-            localStorage.setItem('work_os_tools', JSON.stringify(tools));
-          }, [tools]);
-
-          useEffect(() => {
-            localStorage.setItem('work_os_notes', JSON.stringify(notes));
-          }, [notes]);
-
-          useEffect(() => {
-            localStorage.setItem('work_os_meetings', JSON.stringify(meetings));
-          }, [meetings]);
-
-          useEffect(() => {
-            localStorage.setItem('work_os_team_love', JSON.stringify(teamLove));
-          }, [teamLove]);
-
-          useEffect(() => {
-            localStorage.setItem('work_os_documents', JSON.stringify(documents));
-          }, [documents]);
+          // --- LOCAL STORAGE SYNC ---
+          useEffect(() => { localStorage.setItem('work_os_tasks', JSON.stringify(tasks)); }, [tasks]);
+          useEffect(() => { localStorage.setItem('work_os_tools', JSON.stringify(tools)); }, [tools]);
+          useEffect(() => { localStorage.setItem('work_os_notes', JSON.stringify(notes)); }, [notes]);
+          useEffect(() => { localStorage.setItem('work_os_meetings', JSON.stringify(meetings)); }, [meetings]);
+          useEffect(() => { localStorage.setItem('work_os_team_love', JSON.stringify(teamLove)); }, [teamLove]);
+          useEffect(() => { localStorage.setItem('work_os_documents', JSON.stringify(documents)); }, [documents]);
 
           // --- DATA HANDLERS ---
           const handleAddTask = (e) => {
@@ -145,25 +136,43 @@
               priority: newTask.priority,
               duration: Number(newTask.duration) || 0,
               assignee: newTask.assignee || 'Me',
+              recurrence: newTask.recurrence || 'None',
               dateCreated: new Date().toISOString(),
               dateCompleted: null 
             };
             setTasks(prev => [task, ...prev]);
-            setNewTask({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me' });
+            setNewTask({ title: '', goal: '', priority: 'Medium', duration: '', assignee: newTask.assignee || 'Me', recurrence: 'None' });
           };
 
-          const toggleTaskStatus = (taskToToggle) => {
-            setTasks(prev => prev.map(task => {
-              if (task.id === taskToToggle.id) {
-                const isCompleting = task.status === 'Todo';
-                return { 
-                  ...task, 
-                  status: isCompleting ? 'Done' : 'Todo', 
-                  dateCompleted: isCompleting ? new Date().toISOString() : null 
-                };
+          const handleTaskStatusChange = (taskId, newStatus) => {
+            setTasks(prev => {
+              const taskIndex = prev.findIndex(t => t.id === taskId);
+              if (taskIndex === -1) return prev;
+              
+              const task = prev[taskIndex];
+              const isCompleting = newStatus === 'Done' && task.status !== 'Done';
+              
+              const updatedTasks = [...prev];
+              updatedTasks[taskIndex] = {
+                  ...task,
+                  status: newStatus,
+                  dateCompleted: newStatus === 'Done' ? new Date().toISOString() : null
+              };
+
+              // Handle Auto-Recurrence
+              if (isCompleting && task.recurrence && task.recurrence !== 'None') {
+                  const nextTask = {
+                      ...task,
+                      id: Date.now().toString() + Math.random().toString(36).substring(7),
+                      status: 'Todo',
+                      dateCreated: new Date().toISOString(),
+                      dateCompleted: null
+                  };
+                  updatedTasks.push(nextTask);
               }
-              return task;
-            }));
+
+              return updatedTasks;
+            });
           };
 
           const deleteTask = (id) => setTasks(prev => prev.filter(t => t.id !== id));
@@ -171,68 +180,35 @@
           const handleAddTool = (e) => {
             e.preventDefault();
             if (!newTool.title) return;
-            const tool = {
-              id: Date.now().toString(),
-              ...newTool,
-              dateCreated: new Date().toISOString()
-            };
-            setTools(prev => [tool, ...prev]);
+            setTools(prev => [{ id: Date.now().toString(), ...newTool, dateCreated: new Date().toISOString() }, ...prev]);
             setNewTool({ title: '', description: '', url: '', goal: '' });
           };
-
           const deleteTool = (id) => setTools(prev => prev.filter(t => t.id !== id));
 
           const handleAddNote = (e) => {
             e.preventDefault();
             if (!newNote) return;
-            const note = {
-              id: Date.now().toString(),
-              content: newNote,
-              dateCreated: new Date().toISOString()
-            };
-            setNotes(prev => [note, ...prev]);
+            setNotes(prev => [{ id: Date.now().toString(), content: newNote, dateCreated: new Date().toISOString() }, ...prev]);
             setNewNote('');
           };
-
           const deleteNote = (id) => setNotes(prev => prev.filter(n => n.id !== id));
 
           const handleAddMeeting = (e) => {
             e.preventDefault();
             if (!newMeeting.title || !newMeeting.duration) return;
-            
             const meetingId = Date.now().toString();
             
-            // Extract action items and generate Tasks automatically
             const actions = newMeeting.actionItems.split('\n').map(a => a.trim()).filter(a => a.length > 0);
-            const generatedTasks = actions.map((action, idx) => ({
-              id: meetingId + '-' + idx,
-              title: action,
-              status: 'Todo',
-              goal: '',
-              priority: 'Medium',
-              duration: 15, // Default 15 mins for auto-generated tasks
-              assignee: 'Me',
-              dateCreated: new Date().toISOString(),
-              dateCompleted: null
-            }));
-            
-            if (generatedTasks.length > 0) {
+            if (actions.length > 0) {
+              const generatedTasks = actions.map((action, idx) => ({
+                id: meetingId + '-' + idx, title: action, status: 'Todo', goal: '', priority: 'Medium', duration: 15, assignee: 'Me', recurrence: 'None', dateCreated: new Date().toISOString(), dateCompleted: null
+              }));
               setTasks(prev => [...generatedTasks, ...prev]);
             }
 
-            const meeting = {
-              id: meetingId,
-              title: newMeeting.title,
-              date: newMeeting.date,
-              duration: Number(newMeeting.duration),
-              notes: newMeeting.notes,
-              actionItems: actions,
-              dateCreated: new Date().toISOString()
-            };
-            setMeetings(prev => [meeting, ...prev]);
+            setMeetings(prev => [{ id: meetingId, title: newMeeting.title, date: newMeeting.date, duration: Number(newMeeting.duration), notes: newMeeting.notes, actionItems: actions, dateCreated: new Date().toISOString() }, ...prev]);
             setNewMeeting({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
           };
-
           const deleteMeeting = (id) => setMeetings(prev => prev.filter(m => m.id !== id));
 
           const startEditingMeeting = (meeting) => {
@@ -243,69 +219,79 @@
           const saveMeetingEdits = (id) => {
             const meeting = meetings.find(m => m.id === id);
             if (!meeting) return;
-
             const actions = editMeetingForm.actionItems.split('\n').map(a => a.trim()).filter(a => a.length > 0);
-            
             if (actions.length > 0) {
               const generatedTasks = actions.map((action, idx) => ({
-                id: Date.now().toString() + '-' + idx,
-                title: action,
-                status: 'Todo',
-                goal: '',
-                priority: 'Medium',
-                duration: 15,
-                assignee: 'Me',
-                dateCreated: new Date().toISOString(),
-                dateCompleted: null
+                id: Date.now().toString() + '-' + idx, title: action, status: 'Todo', goal: '', priority: 'Medium', duration: 15, assignee: 'Me', recurrence: 'None', dateCreated: new Date().toISOString(), dateCompleted: null
               }));
               setTasks(prev => [...generatedTasks, ...prev]);
             }
-
-            const updatedMeeting = {
-              ...meeting,
-              notes: editMeetingForm.notes,
-              actionItems: [...(meeting.actionItems || []), ...actions]
-            };
-
-            setMeetings(prev => prev.map(m => m.id === id ? updatedMeeting : m));
+            setMeetings(prev => prev.map(m => m.id === id ? { ...m, notes: editMeetingForm.notes, actionItems: [...(m.actionItems || []), ...actions] } : m));
             setEditingMeetingId(null);
-            setEditMeetingForm({ notes: '', actionItems: '' });
           };
 
           const handleAddTeamLove = (e) => {
             e.preventDefault();
             if (!newTeamLove.message) return;
-            const item = {
-              id: Date.now().toString(),
-              ...newTeamLove,
-              dateCreated: new Date().toISOString()
-            };
-            setTeamLove(prev => [item, ...prev]);
+            setTeamLove(prev => [{ id: Date.now().toString(), ...newTeamLove, dateCreated: new Date().toISOString() }, ...prev]);
             setNewTeamLove({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
           };
-
           const deleteTeamLove = (id) => setTeamLove(prev => prev.filter(i => i.id !== id));
 
           const handleAddDocument = (e) => {
             e.preventDefault();
             if (!newDocument.title) return;
-            const docItem = {
-              id: Date.now().toString(),
-              ...newDocument,
-              dateCreated: new Date().toISOString()
-            };
-            setDocuments(prev => [docItem, ...prev]);
+            setDocuments(prev => [{ id: Date.now().toString(), ...newDocument, dateCreated: new Date().toISOString() }, ...prev]);
             setNewDocument({ title: '', url: '', description: '' });
           };
-
           const deleteDocument = (id) => setDocuments(prev => prev.filter(i => i.id !== id));
 
-          // --- SORTED DATA FOR DISPLAY ---
-          const sortedMeetings = useMemo(() => {
-            return [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
-          }, [meetings]);
+          // Settings Backup & Restore Handlers
+          const exportData = () => {
+            const data = { tasks, tools, notes, meetings, teamLove, documents };
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `work-os-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
 
-          // --- DERIVED STATS & CAPACITY SUMMARY ---
+          const importData = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const data = JSON.parse(event.target.result);
+                if (data.tasks) setTasks(data.tasks);
+                if (data.tools) setTools(data.tools);
+                if (data.notes) setNotes(data.notes);
+                if (data.meetings) setMeetings(data.meetings);
+                if (data.teamLove) setTeamLove(data.teamLove);
+                if (data.documents) setDocuments(data.documents);
+                alert('Data successfully imported!');
+              } catch(err) {
+                alert('Invalid backup file. Could not import data.');
+              }
+            };
+            reader.readAsText(file);
+          };
+
+          // Kanban Drag & Drop
+          const handleDragStart = (e, taskId) => {
+            e.dataTransfer.setData('taskId', taskId);
+          };
+          const handleDrop = (e, newStatus) => {
+            const taskId = e.dataTransfer.getData('taskId');
+            handleTaskStatusChange(taskId, newStatus);
+          };
+          const handleDragOver = (e) => {
+            e.preventDefault();
+          };
+
+          // --- COMPUTED DATA ---
           const myTasks = useMemo(() => tasks.filter(t => !t.assignee || t.assignee === 'Me'), [tasks]);
           const nuriaTasks = useMemo(() => tasks.filter(t => t.assignee === 'Nuria'), [tasks]);
 
@@ -316,7 +302,6 @@
             const monday = new Date(now);
             monday.setDate(now.getDate() - distanceToMonday);
             monday.setHours(0, 0, 0, 0);
-            
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
             sunday.setHours(23, 59, 59, 999);
@@ -327,7 +312,6 @@
               if (isNaN(mDate.getTime())) return false;
               return mDate >= monday && mDate <= sunday;
             });
-            
             const meetingMins = thisWeekMeetings.reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
             
             const tasksByGoal = {};
@@ -335,9 +319,8 @@
             tasksByGoal['Unassigned'] = 0;
 
             let totalTaskMins = 0;
-
             myTasks.filter(t => {
-              if (t.status === 'Todo') return true;
+              if (t.status !== 'Done') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
                 if (isNaN(cDate.getTime())) return false;
@@ -351,16 +334,12 @@
               totalTaskMins += mins;
             });
 
-            const totalCapacityHours = 40;
             const meetingHours = meetingMins / 60;
             const taskHours = totalTaskMins / 60;
-            const remainingHours = totalCapacityHours - meetingHours - taskHours;
+            const remainingHours = 40 - meetingHours - taskHours;
 
-            // Convert tasksByGoal mins to hours for rendering
             const tasksByGoalHours = {};
-            Object.keys(tasksByGoal).forEach(k => {
-              tasksByGoalHours[k] = (tasksByGoal[k] / 60).toFixed(1);
-            });
+            Object.keys(tasksByGoal).forEach(k => { tasksByGoalHours[k] = (tasksByGoal[k] / 60).toFixed(1); });
 
             return {
               meetingHours: meetingHours.toFixed(1),
@@ -373,17 +352,15 @@
           const nuriaCapacityStats = useMemo(() => {
             const now = new Date();
             const dayOfWeek = now.getDay();
-            const distanceToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
             const monday = new Date(now);
-            monday.setDate(now.getDate() - distanceToMonday);
+            monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
             monday.setHours(0, 0, 0, 0);
-            
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
             sunday.setHours(23, 59, 59, 999);
 
             const thisWeekTaskMins = nuriaTasks.filter(t => {
-              if (t.status === 'Todo') return true;
+              if (t.status !== 'Done') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
                 if (isNaN(cDate.getTime())) return false;
@@ -392,308 +369,43 @@
               return false;
             }).reduce((acc, t) => acc + (Number(t.duration) || 0), 0);
 
-            const totalCapacityHours = 40;
             const taskHours = thisWeekTaskMins / 60;
-            const remainingHours = totalCapacityHours - taskHours;
-
             return {
               taskHours: taskHours.toFixed(1),
-              remainingHours: remainingHours.toFixed(1)
+              remainingHours: (40 - taskHours).toFixed(1)
             };
           }, [nuriaTasks]);
 
-          const historicalCapacity = useMemo(() => {
-            const weeks = {};
+          const quarterlyReviewReport = useMemo(() => {
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-            meetings.forEach(m => {
-              const week = getMonday(m.date);
-              if (!week) return;
-              if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
-              weeks[week].meetingMins += (Number(m.duration) || 0);
-            });
-
-            myTasks.forEach(t => {
-              let week;
-              if (t.status === 'Done' && t.dateCompleted) {
-                week = getMonday(t.dateCompleted);
-              } else if (t.status === 'Todo') {
-                week = getMonday(new Date().toISOString()); 
-              }
-              
-              if (!week) return;
-              if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
-              weeks[week].taskMins += (Number(t.duration) || 0);
-            });
-
-            return Object.entries(weeks).map(([weekStart, data]) => {
-              const meetingHours = data.meetingMins / 60;
-              const taskHours = data.taskMins / 60;
-              const remainingHours = 40 - meetingHours - taskHours;
-              return {
-                weekStart,
-                meetingHours: meetingHours.toFixed(1),
-                taskHours: taskHours.toFixed(1),
-                remainingHours: remainingHours.toFixed(1)
-              };
-            }).sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
-          }, [meetings, myTasks]);
-
-          const weeklyGoalTrend = useMemo(() => {
-            const weeks = {};
-            myTasks.filter(t => t.status === 'Done' && t.dateCompleted).forEach(t => {
-               const week = getMonday(t.dateCompleted);
-               if (!week) return;
-               
-               if (!weeks[week]) {
-                   weeks[week] = { weekStart: week };
-                   STRATEGIC_GOALS.forEach(g => weeks[week][g] = 0);
-                   weeks[week]['Unassigned'] = 0;
-               }
-               const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
-               weeks[week][goalKey] += (Number(t.duration) || 0) / 60;
-            });
+            const qTasks = myTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo);
+            const qTools = tools.filter(t => new Date(t.dateCreated) >= ninetyDaysAgo);
+            const qLove = teamLove.filter(l => new Date(l.date) >= ninetyDaysAgo);
             
-            return Object.values(weeks)
-              .sort((a,b) => new Date(a.weekStart) - new Date(b.weekStart))
-              .map(w => {
-                const formattedName = new Date(w.weekStart).toLocaleDateString(undefined, {month: 'short', day:'numeric'});
-                // Format numbers to 1 decimal place for the chart
-                const formattedWeek = { name: formattedName };
-                Object.keys(w).forEach(k => {
-                  if (k !== 'weekStart') {
-                    formattedWeek[k] = Number(w[k].toFixed(1));
-                  }
-                });
-                return formattedWeek;
-              });
-          }, [myTasks]);
+            const hoursLogged = (qTasks.reduce((acc, t) => acc + (Number(t.duration)||0), 0) / 60).toFixed(1);
 
-          const goalStats = useMemo(() => {
-            const stats = STRATEGIC_GOALS.reduce((acc, goal) => {
-                acc[goal] = { spent: 0, planned: 0, count: 0 };
-                return acc;
-            }, {});
-            stats['Unassigned'] = { spent: 0, planned: 0, count: 0 };
+            let report = `QUARTERLY PERFORMANCE REVIEW SUMMARY (Last 90 Days)\nGenerated: ${new Date().toLocaleDateString()}\n`;
+            report += `====================================================\n\n`;
+            report += `📊 HIGH-LEVEL METRICS\n`;
+            report += `- Total Tasks Completed: ${qTasks.length}\n`;
+            report += `- Total Project/Task Hours Logged: ${hoursLogged}h\n`;
+            report += `- Tools & Systems Built: ${qTools.length}\n\n`;
 
-            let totalAllSpentMins = 0;
+            report += `🎯 TOP ACCOMPLISHMENTS (Tools Built)\n`;
+            if(qTools.length === 0) report += `- None recorded.\n`;
+            qTools.forEach(t => report += `- ${t.title}: ${t.description}\n`);
+            report += `\n`;
 
-            myTasks.forEach(t => {
-                const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
-                if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
-                
-                stats[goalKey].count += 1;
-                if (t.status === 'Done') {
-                    const mins = Number(t.duration) || 0;
-                    stats[goalKey].spent += mins;
-                    totalAllSpentMins += mins;
-                } else {
-                    stats[goalKey].planned += (Number(t.duration) || 0);
-                }
-            });
+            report += `💖 TEAM FEEDBACK & LOVE\n`;
+            if(qLove.length === 0) report += `- None recorded.\n`;
+            qLove.forEach(l => report += `- "${l.message}" (From: ${l.sender || 'Anonymous'})\n`);
 
-            return Object.entries(stats).map(([goal, data]) => {
-                const spentPctOfTotal = totalAllSpentMins > 0 ? ((data.spent / totalAllSpentMins) * 100).toFixed(1) : 0;
-                return {
-                  goal,
-                  spentHours: (data.spent / 60).toFixed(1),
-                  plannedHours: (data.planned / 60).toFixed(1),
-                  totalHours: ((data.spent + data.planned) / 60).toFixed(1),
-                  spentPctOfTotal,
-                  count: data.count
-                };
-            }).filter(g => g.count > 0 || g.goal !== 'Unassigned')
-               .sort((a, b) => Number(b.totalHours) - Number(a.totalHours));
-          }, [myTasks]);
+            return report;
+          }, [myTasks, tools, teamLove]);
 
-          const meetingStats = useMemo(() => {
-            if (meetings.length === 0) return { totalHours: 0, avgWeeklyHours: 0, percentOfWeek: 0 };
-            
-            const totalMinutes = meetings.reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
-            const totalHours = totalMinutes / 60;
-
-            const earliestMeeting = meetings.reduce((earliest, m) => {
-              const d = new Date(m.date);
-              return d < earliest ? d : earliest;
-            }, new Date());
-
-            const daysActive = Math.max(1, (Date.now() - earliestMeeting.getTime()) / (1000 * 60 * 60 * 24));
-            const weeksActive = Math.max(1, daysActive / 7);
-            
-            const avgWeeklyHours = totalHours / weeksActive;
-            const percentOfWeek = (avgWeeklyHours / 40) * 100;
-
-            return {
-              totalHours: totalHours.toFixed(1),
-              avgWeeklyHours: avgWeeklyHours.toFixed(1),
-              percentOfWeek: percentOfWeek.toFixed(1)
-            };
-          }, [meetings]);
-
-          const weeklySummary = useMemo(() => {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-            const completedTasks = myTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= oneWeekAgo);
-            const recentTools = tools.filter(t => new Date(t.dateCreated) >= oneWeekAgo);
-            const weeklyMeetings = meetings.filter(m => new Date(m.date) >= oneWeekAgo);
-            const weeklyMeetingHours = (weeklyMeetings.reduce((acc, m) => acc + Number(m.duration), 0) / 60).toFixed(1);
-
-            let summaryText = `Weekly Summary (${new Date().toLocaleDateString()})\n\n`;
-            
-            summaryText += `✅ Tasks Completed (${completedTasks.length}):\n`;
-            if (completedTasks.length === 0) summaryText += `  - No tasks completed this week.\n`;
-            completedTasks.forEach(t => {
-              const goalText = t.goal ? ` [${t.goal}]` : '';
-              summaryText += `  - ${t.title}${goalText}\n`;
-            });
-
-            summaryText += `\n🛠️ Tools/Assets Created (${recentTools.length}):\n`;
-            if (recentTools.length === 0) summaryText += `  - No new tools created this week.\n`;
-            recentTools.forEach(t => {
-              const goalText = t.goal ? ` [${t.goal}]` : '';
-              summaryText += `  - ${t.title}: ${t.description}${goalText}\n`;
-            });
-
-            summaryText += `\n📅 Time in Meetings This Week: ${weeklyMeetingHours} hours\n`;
-
-            return summaryText;
-          }, [tasks, tools, meetings]);
-
-          const copyToClipboard = () => {
-            navigator.clipboard.writeText(weeklySummary).catch(err => {
-              const textArea = document.createElement("textarea");
-              textArea.value = weeklySummary;
-              document.body.appendChild(textArea);
-              textArea.select();
-              try { document.execCommand('copy'); } catch (e) {}
-              document.body.removeChild(textArea);
-            });
-          };
-
-          // --- RENDERERS ---
-          const renderDashboard = () => (
-            <div className="space-y-8 animate-in">
-              {/* Weekly Capacity Card */}
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <Battery size={20} className="text-blue-500" /> This Week's Capacity (40h)
-                  </h3>
-                  <span className={`font-bold px-3 py-1 rounded-full text-sm ${capacityStats.remainingHours < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {capacityStats.remainingHours}h Remaining
-                  </span>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-100 rounded-full h-6 mb-4 flex overflow-hidden shadow-inner">
-                  <div 
-                    className="h-6 transition-all border-r border-white/20 last:border-0 flex items-center justify-center text-[10px] text-white font-bold" 
-                    style={{ width: `${(capacityStats.meetingHours / 40) * 100}%`, backgroundColor: GOAL_COLORS['Meetings'] }} 
-                    title={`Meetings: ${capacityStats.meetingHours}h`}
-                  >
-                    {capacityStats.meetingHours > 1 && 'Mtg'}
-                  </div>
-                  {Object.entries(capacityStats.tasksByGoal).map(([goal, hours]) => {
-                    if (Number(hours) === 0) return null;
-                    return (
-                      <div 
-                        key={goal}
-                        className="h-6 transition-all border-r border-white/20 last:border-0 flex items-center justify-center text-[10px] text-white font-bold" 
-                        style={{ width: `${(Number(hours) / 40) * 100}%`, backgroundColor: GOAL_COLORS[goal] || GOAL_COLORS['Unassigned'] }} 
-                        title={`${goal}: ${hours}h`}
-                      >
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Legend */}
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium bg-gray-50 p-4 rounded-lg">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS['Meetings']}}></span> Meetings: {capacityStats.meetingHours}h</span>
-                  {Object.entries(capacityStats.tasksByGoal).map(([goal, hours]) => {
-                    if (Number(hours) === 0) return null;
-                    return (
-                      <span key={goal} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS[goal] || GOAL_COLORS['Unassigned']}}></span> 
-                        {goal}: {hours}h
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {tools.length > 0 && (
-                <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Wrench size={16} /> My Tools
-                  </h3>
-                  <div className="flex flex-wrap gap-3">
-                    {tools.map(tool => (
-                      tool.url ? (
-                        <a 
-                          key={tool.id} 
-                          href={tool.url.startsWith('http') ? tool.url : `https://${tool.url}`}
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium shadow-sm"
-                        >
-                          {tool.title} <ExternalLink size={14} className="opacity-70" />
-                        </a>
-                      ) : (
-                        <span key={tool.id} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium cursor-default">
-                          {tool.title}
-                        </span>
-                      )
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><CheckSquare size={24} /></div>
-                  <div>
-                    <p className="text-sm text-gray-500 font-medium">My Pending Tasks</p>
-                    <p className="text-2xl font-bold text-gray-800">{myTasks.filter(t => t.status === 'Todo').length}</p>
-                  </div>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><Clock size={24} /></div>
-                  <div>
-                    <p className="text-sm text-gray-500 font-medium">Avg Mtg Hrs/Week</p>
-                    <p className="text-2xl font-bold text-gray-800">{meetingStats.avgWeeklyHours}h</p>
-                  </div>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-4">
-                  <div className="p-3 bg-purple-50 text-purple-600 rounded-lg"><PieChart size={24} /></div>
-                  <div>
-                    <p className="text-sm text-gray-500 font-medium">% of 40h Week</p>
-                    <p className="text-2xl font-bold text-gray-800">{meetingStats.percentOfWeek}%</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <FileText size={20} className="text-gray-500" /> Auto-Generated Weekly Summary
-                  </h3>
-                  <button 
-                    onClick={copyToClipboard}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm font-medium"
-                  >
-                    <Copy size={16} /> Copy to Clipboard
-                  </button>
-                </div>
-                <textarea 
-                  readOnly 
-                  value={weeklySummary}
-                  className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"
-                />
-              </div>
-            </div>
-          );
-
+          // --- COMPONENTS ---
           const getPriorityStyles = (priority) => {
             switch(priority) {
               case 'High': return 'bg-red-50 text-red-600 border-red-100';
@@ -703,699 +415,245 @@
             }
           };
 
-          const renderTasks = () => (
-            <div className="space-y-6 animate-in">
-              <form onSubmit={handleAddTask} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3">
-                <input 
-                  type="text" 
-                  placeholder="What needs to be done?" 
-                  className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  value={newTask.title}
-                  onChange={e => setNewTask({...newTask, title: e.target.value})}
-                />
-                <div className="flex gap-3 md:w-auto w-full">
-                  <select 
-                    className="md:w-24 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 bg-white"
-                    value={newTask.assignee}
-                    onChange={e => setNewTask({...newTask, assignee: e.target.value})}
-                  >
-                    <option value="Me">Me</option>
-                    <option value="Nuria">Nuria</option>
-                  </select>
-                  <div className="relative flex-1 md:flex-none">
-                    <input 
-                      type="number" 
-                      placeholder="Mins" 
-                      className="w-full md:w-20 p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 bg-white"
-                      value={newTask.duration}
-                      onChange={e => setNewTask({...newTask, duration: e.target.value})}
-                    />
-                    <span className="absolute right-2 top-2.5 text-gray-400 text-sm">m</span>
-                  </div>
-                  <select 
-                    className="flex-1 md:flex-none p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 bg-white"
-                    value={newTask.priority}
-                    onChange={e => setNewTask({...newTask, priority: e.target.value})}
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                  <select 
-                    className="flex-1 md:flex-none p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 bg-white"
-                    value={newTask.goal}
-                    onChange={e => setNewTask({...newTask, goal: e.target.value})}
-                  >
-                    <option value="">Select Goal</option>
-                    {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
+          const TaskCard = ({ task }) => (
+            <div draggable onDragStart={(e) => handleDragStart(e, task.id)} className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 cursor-move hover:shadow-md transition-shadow group">
+                <div className="flex justify-between items-start mb-2">
+                    <p className="text-gray-800 font-medium text-sm leading-tight pr-4">{task.title}</p>
+                    <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <Trash2 size={14} />
+                    </button>
                 </div>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-                  <Plus size={18} /> Add
-                </button>
-              </form>
+                <div className="flex flex-wrap gap-1 mt-2">
+                    {task.duration > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200 text-gray-500">
+                        <Clock size={10} /> {task.duration}m
+                      </span>
+                    )}
+                    {task.priority && (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${getPriorityStyles(task.priority)}`}>
+                        <Flag size={10} /> {task.priority}
+                      </span>
+                    )}
+                    {task.recurrence && task.recurrence !== 'None' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-purple-100 bg-purple-50 text-purple-600">
+                            <Repeat size={10} /> {task.recurrence}
+                        </span>
+                    )}
+                </div>
+                {task.goal && (
+                    <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                            <Target size={10} /> {task.goal}
+                        </span>
+                    </div>
+                )}
+            </div>
+          );
 
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600">My Active Tasks</div>
+          const renderKanban = (taskList) => (
+            <div className="flex gap-4 overflow-x-auto pb-4 h-[600px] kanban-scroll animate-in">
+                {TASK_STATUSES.map(status => (
+                    <div 
+                        key={status} 
+                        className="flex-1 min-w-[280px] bg-slate-100/50 p-4 rounded-xl border border-slate-200 flex flex-col"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, status)}
+                    >
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-slate-700 text-sm">{status}</h4>
+                            <span className="bg-white text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
+                                {taskList.filter(t => t.status === status).length}
+                            </span>
+                        </div>
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 kanban-scroll">
+                            {taskList.filter(t => t.status === status).map(task => (
+                                <TaskCard key={task.id} task={task} />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+          );
+
+          const renderList = (taskList) => (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in">
                 <ul className="divide-y divide-gray-100">
-                  {myTasks.filter(t => t.status === 'Todo').length === 0 && (
-                    <li className="p-6 text-center text-gray-400">No active tasks. You're all caught up!</li>
+                  {taskList.length === 0 && (
+                    <li className="p-6 text-center text-gray-400">No tasks found.</li>
                   )}
-                  {myTasks.filter(t => t.status === 'Todo').map(task => (
-                    <li key={task.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <button onClick={() => toggleTaskStatus(task)} className="text-gray-300 hover:text-blue-500 transition-colors shrink-0">
-                          <Circle size={22} />
-                        </button>
+                  {taskList.map(task => (
+                    <li key={task.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 transition-colors group ${task.status === 'Done' ? 'opacity-75' : ''}`}>
+                      <div className="flex items-center gap-3 overflow-hidden mb-2 sm:mb-0">
+                        <select 
+                            value={task.status} 
+                            onChange={(e) => handleTaskStatusChange(task.id, e.target.value)}
+                            className={`text-xs font-bold rounded-md px-2 py-1 border outline-none cursor-pointer ${task.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-slate-600 border-slate-200'}`}
+                        >
+                            {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                         <div className="truncate">
-                          <p className="text-gray-800 font-medium truncate">{task.title}</p>
+                          <p className={`text-gray-800 font-medium truncate ${task.status === 'Done' ? 'line-through text-gray-500' : ''}`}>{task.title}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             {task.duration > 0 && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
                                 <Clock size={10} /> {task.duration}m
                               </span>
                             )}
                             {task.priority && (
-                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${getPriorityStyles(task.priority)}`}>
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${getPriorityStyles(task.priority)}`}>
                                 <Flag size={10} /> {task.priority}
                               </span>
                             )}
+                            {task.recurrence && task.recurrence !== 'None' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-purple-100 bg-purple-50 text-purple-600">
+                                    <Repeat size={10} /> {task.recurrence}
+                                </span>
+                            )}
                             {task.goal && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
                                 <Target size={10} /> {task.goal}
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4">
+                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4 self-end sm:self-auto">
                         <Trash2 size={18} />
                       </button>
                     </li>
                   ))}
                 </ul>
-
-                <div className="p-4 border-y border-gray-100 bg-gray-50 font-medium text-gray-600 mt-4">My Completed Tasks</div>
-                <ul className="divide-y divide-gray-100 opacity-75">
-                  {myTasks.filter(t => t.status === 'Done').map(task => (
-                    <li key={task.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <button onClick={() => toggleTaskStatus(task)} className="text-emerald-500 hover:text-gray-400 transition-colors shrink-0">
-                          <CheckCircle2 size={22} />
-                        </button>
-                        <div className="truncate">
-                          <p className="text-gray-500 line-through truncate">{task.title}</p>
-                        </div>
-                      </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4">
-                        <Trash2 size={18} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           );
 
-          const renderMeetings = () => (
+          // --- TAB RENDERERS ---
+          const renderTasks = () => (
             <div className="space-y-6 animate-in">
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <h3 className="text-indigo-900 font-bold text-lg mb-1">Time Spent in Meetings</h3>
-                  <p className="text-indigo-700/80 text-sm">Logging your meetings helps calculate your weekly time sink based on a standard 40-hour work week.</p>
-                </div>
-                <div className="flex gap-6">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.totalHours}h</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Total Time</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.avgWeeklyHours}h</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Weekly Avg</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.percentOfWeek}%</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Of 40h Week</p>
-                  </div>
+              <div className="flex justify-between items-center bg-white p-2 px-4 rounded-xl border border-gray-100 shadow-sm">
+                <span className="text-sm font-bold text-gray-600">My Task Pipeline</span>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                    <button onClick={() => setTaskView('list')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><List size={16}/> List</button>
+                    <button onClick={() => setTaskView('kanban')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'kanban' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><KanbanSquare size={16}/> Board</button>
                 </div>
               </div>
 
-              <form onSubmit={handleAddMeeting} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Meeting Topic / Title" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    value={newMeeting.title}
-                    onChange={e => setNewMeeting({...newMeeting, title: e.target.value})}
-                  />
-                  <input 
-                    type="date" 
-                    className="p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-gray-700 bg-white"
-                    value={newMeeting.date}
-                    onChange={e => setNewMeeting({...newMeeting, date: e.target.value})}
-                  />
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      placeholder="Duration" 
-                      className="w-32 p-2 pr-12 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                      value={newMeeting.duration}
-                      onChange={e => setNewMeeting({...newMeeting, duration: e.target.value})}
-                    />
-                    <span className="absolute right-3 top-2.5 text-gray-400 text-sm">min</span>
+              <form onSubmit={handleAddTask} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <input type="text" placeholder="What needs to be done?" className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+                <div className="flex flex-wrap gap-3">
+                  <div className="relative flex-1 min-w-[100px]">
+                    <input type="number" placeholder="Mins" className="w-full p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none text-sm" value={newTask.duration} onChange={e => setNewTask({...newTask, duration: e.target.value})} />
+                    <span className="absolute right-2 top-2.5 text-gray-400 text-sm">m</span>
                   </div>
-                  <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-                    <Plus size={18} /> Quick Log
-                  </button>
-                </div>
-              </form>
-
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600 flex items-center gap-2">
-                  <CalendarDays size={18} /> Meeting Log
-                </div>
-                <ul className="divide-y divide-gray-100">
-                  {sortedMeetings.length === 0 && (
-                    <li className="p-6 text-center text-gray-400">No meetings logged yet.</li>
-                  )}
-                  {sortedMeetings.map(meeting => {
-                    const isEditing = editingMeetingId === meeting.id;
-                    return (
-                      <li key={meeting.id} className="p-4 flex flex-col hover:bg-gray-50 transition-colors group">
-                        <div className="flex items-center justify-between w-full">
-                          <div>
-                            <p className="text-gray-800 font-medium">{meeting.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{new Date(meeting.date).toLocaleDateString()}</p>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <span className="font-mono text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-md hidden md:inline-block">
-                              {meeting.duration} min
-                            </span>
-                            <button 
-                              onClick={() => isEditing ? setEditingMeetingId(null) : startEditingMeeting(meeting)} 
-                              className="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded hover:bg-indigo-100 transition-colors text-sm font-medium flex items-center gap-2"
-                            >
-                              <Edit3 size={14} /> {isEditing ? 'Cancel' : 'Edit Notes & Actions'}
-                            </button>
-                            <button onClick={() => deleteMeeting(meeting.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* Edit Mode */}
-                        {isEditing && (
-                          <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in">
-                            <textarea 
-                              placeholder="Meeting Notes..." 
-                              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-20 text-sm"
-                              value={editMeetingForm.notes}
-                              onChange={e => setEditMeetingForm({...editMeetingForm, notes: e.target.value})}
-                            />
-                            <div>
-                              <p className="text-xs font-bold text-gray-500 uppercase mb-2">Add New Action Items (Will send to To-Do List)</p>
-                              <textarea 
-                                placeholder="Enter 1 action item per line..." 
-                                className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-20 text-sm"
-                                value={editMeetingForm.actionItems}
-                                onChange={e => setEditMeetingForm({...editMeetingForm, actionItems: e.target.value})}
-                              />
-                            </div>
-                            <div className="flex justify-end">
-                              <button onClick={() => saveMeetingEdits(meeting.id)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors">
-                                Save Changes
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* View Mode (Only show if there are notes or actions) */}
-                        {!isEditing && (meeting.notes || (meeting.actionItems && meeting.actionItems.length > 0)) && (
-                          <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {meeting.notes && (
-                              <div>
-                                <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><AlignLeft size={12}/> Notes</p>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{meeting.notes}</p>
-                              </div>
-                            )}
-                            {meeting.actionItems && meeting.actionItems.length > 0 && (
-                              <div>
-                                <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><ListTodo size={12}/> Actions Triggered</p>
-                                <ul className="list-disc pl-4 text-sm text-gray-700 space-y-1">
-                                  {meeting.actionItems.map((item, i) => <li key={i}>{item}</li>)}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            </div>
-          );
-
-          const renderInsights = () => (
-            <div className="space-y-6 animate-in">
-              
-              {/* Strategic Goal Time Breakdown */}
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
-                  <Target size={20} className="text-indigo-500" /> Time by Strategic Goal
-                </h3>
-                {goalStats.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500 text-sm bg-gray-50 rounded-lg border border-gray-100 border-dashed">
-                    Assign durations and goals to your completed tasks to see insights here!
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    {goalStats.map(stat => {
-                      const total = Math.max(Number(stat.totalHours), 0.1); 
-                      const spentPct = (Number(stat.spentHours) / total) * 100;
-                      const plannedPct = (Number(stat.plannedHours) / total) * 100;
-                      
-                      return (
-                        <div key={stat.goal}>
-                          <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
-                            <span className="flex items-center gap-2">
-                              <span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}}></span>
-                              {stat.goal} <span className="text-gray-400 font-normal">({stat.count} tasks)</span>
-                            </span>
-                            <span>{stat.totalHours}h Total</span>
-                          </div>
-                          <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
-                            <div className="h-2 transition-all opacity-100" style={{width: `${spentPct}%`, backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}} title="Time Spent (Done)"></div>
-                            <div className="h-2 transition-all opacity-40" style={{width: `${plannedPct}%`, backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}} title="Time Planned (Todo)"></div>
-                          </div>
-                          <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
-                            <div className="flex gap-4">
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}}></span> {stat.spentHours}h Spent</span>
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full opacity-40" style={{backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}}></span> {stat.plannedHours}h Planned</span>
-                            </div>
-                            {Number(stat.spentHours) > 0 && (
-                              <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-bold">
-                                {stat.spentPctOfTotal}% of total work
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Weekly Goal Trend Line Chart */}
-              {weeklyGoalTrend.length > 0 && (
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6">
-                    <Activity size={20} className="text-slate-500" /> Goal Trend (Completed Hours)
-                  </h3>
-                  <div className="h-80 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={weeklyGoalTrend} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dx={-10} />
-                        <Tooltip 
-                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                          itemStyle={{fontSize: '14px', fontWeight: '500'}}
-                        />
-                        <Legend iconType="circle" wrapperStyle={{fontSize: '12px', paddingTop: '20px'}} />
-                        {STRATEGIC_GOALS.map(goal => (
-                          <Line 
-                            key={goal} 
-                            type="monotone" 
-                            dataKey={goal} 
-                            stroke={GOAL_COLORS[goal]} 
-                            strokeWidth={3}
-                            dot={{r: 4, strokeWidth: 2}}
-                            activeDot={{r: 6}}
-                          />
-                        ))}
-                        <Line 
-                          key="Unassigned" 
-                          type="monotone" 
-                          dataKey="Unassigned" 
-                          stroke={GOAL_COLORS['Unassigned']} 
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {/* Historical Capacity Card */}
-              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
-                  <History size={20} className="text-slate-500" /> Weekly Capacity History
-                </h3>
-                {historicalCapacity.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
-                    No capacity data recorded yet.
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    {historicalCapacity.map((week, idx) => (
-                      <div key={week.weekStart} className={`${idx !== 0 ? 'pt-5 border-t border-gray-100' : ''}`}>
-                        <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
-                          <span>Week of {new Date(week.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} {idx === 0 ? '(Current)' : ''}</span>
-                          <span className={`${week.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                            {week.remainingHours}h remaining
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
-                          <div className="bg-indigo-500 h-2 transition-all" style={{ width: `${(week.meetingHours / 40) * 100}%` }} title="Meetings"></div>
-                          <div className="bg-blue-500 h-2 transition-all" style={{ width: `${(week.taskHours / 40) * 100}%` }} title="Tasks"></div>
-                        </div>
-                        <div className="flex gap-4 text-xs text-gray-500 font-medium">
-                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> {week.meetingHours}h Meetings</span>
-                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {week.taskHours}h Tasks</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-
-          const renderTools = () => (
-            <div className="space-y-6 animate-in">
-              <form onSubmit={handleAddTool} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Tool / Project Name" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                    value={newTool.title}
-                    onChange={e => setNewTool({...newTool, title: e.target.value})}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="URL Link (optional)" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                    value={newTool.url}
-                    onChange={e => setNewTool({...newTool, url: e.target.value})}
-                  />
-                  <select 
-                    className="md:w-64 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-700 bg-white"
-                    value={newTool.goal}
-                    onChange={e => setNewTool({...newTool, goal: e.target.value})}
-                  >
-                    <option value="">Select Strategic Goal</option>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
+                    <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+                  </select>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.recurrence} onChange={e => setNewTask({...newTask, recurrence: e.target.value})}>
+                    <option value="None">Does not recur</option><option value="Weekly">Weekly</option><option value="Monthly">Monthly</option>
+                  </select>
+                  <select className="flex-1 min-w-[150px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.goal} onChange={e => setNewTask({...newTask, goal: e.target.value})}>
+                    <option value="">Select Goal</option>
                     {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
-                </div>
-                <textarea 
-                  placeholder="What does this tool do?" 
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 resize-none h-20"
-                  value={newTool.description}
-                  onChange={e => setNewTool({...newTool, description: e.target.value})}
-                />
-                <div className="flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
-                    <Plus size={18} /> Log Tool
+                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-colors min-w-[100px]">
+                    <Plus size={16} /> Add
                   </button>
                 </div>
               </form>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {tools.length === 0 && (
-                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
-                    No tools logged yet. Start building!
-                  </div>
-                )}
-                {tools.map(tool => (
-                  <div key={tool.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col group relative">
-                    <button onClick={() => deleteTool(tool.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={16} />
-                    </button>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Wrench size={18} /></div>
-                      <h4 className="font-bold text-gray-800 pr-6">{tool.title}</h4>
-                    </div>
-                    <p className="text-gray-600 text-sm mb-4 flex-1">{tool.description}</p>
-                    
-                    <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
-                      {tool.goal ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md bg-gray-100 text-gray-600">
-                          <Target size={12} /> {tool.goal}
-                        </span>
-                      ) : <span />}
-                      
-                      {tool.url && (
-                        <a 
-                          href={tool.url.startsWith('http') ? tool.url : `https://${tool.url}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1"
-                        >
-                          Open <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {taskView === 'kanban' ? renderKanban(myTasks) : renderList(myTasks)}
             </div>
           );
 
           const renderDirectReports = () => (
             <div className="space-y-6 animate-in">
-              {/* Nuria's Capacity Card */}
               <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
                   <Battery size={20} className="text-pink-500" /> Nuria's Capacity (40h)
                 </h3>
                 <div className="w-full bg-gray-100 rounded-full h-4 mb-3 flex overflow-hidden">
-                  <div className="bg-pink-500 h-4 transition-all" style={{ width: `${(nuriaCapacityStats.taskHours / 40) * 100}%` }} title="Tasks"></div>
+                  <div className="bg-pink-500 h-4 transition-all" style={{ width: `${(nuriaCapacityStats.taskHours / 40) * 100}%` }}></div>
                 </div>
                 <div className="flex justify-between text-sm text-gray-600 font-medium">
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-pink-500"></span> Tasks: {nuriaCapacityStats.taskHours}h</span>
-                  <span className={`font-bold ${nuriaCapacityStats.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                    Remaining: {nuriaCapacityStats.remainingHours}h
-                  </span>
+                  <span className={`font-bold ${nuriaCapacityStats.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>{nuriaCapacityStats.remainingHours}h Remaining</span>
                 </div>
               </div>
 
-              {/* Form to add task specifically for Nuria */}
+              <div className="flex justify-between items-center bg-white p-2 px-4 rounded-xl border border-gray-100 shadow-sm">
+                <span className="text-sm font-bold text-gray-600">Nuria's Pipeline</span>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                    <button onClick={() => setTaskView('list')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'list' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500'}`}><List size={16}/> List</button>
+                    <button onClick={() => setTaskView('kanban')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'kanban' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500'}`}><KanbanSquare size={16}/> Board</button>
+                </div>
+              </div>
+
               <form onSubmit={(e) => {
                   e.preventDefault();
                   if (!newTask.title) return;
                   const task = { 
-                    id: Date.now().toString(), 
-                    title: newTask.title, 
-                    status: 'Todo', 
-                    goal: newTask.goal, 
-                    priority: newTask.priority,
-                    duration: Number(newTask.duration) || 0,
-                    assignee: 'Nuria',
-                    dateCreated: new Date().toISOString(),
-                    dateCompleted: null 
+                    id: Date.now().toString(), title: newTask.title, status: 'Todo', goal: newTask.goal, priority: newTask.priority, duration: Number(newTask.duration) || 0, assignee: 'Nuria', recurrence: newTask.recurrence || 'None', dateCreated: new Date().toISOString(), dateCompleted: null 
                   };
                   setTasks(prev => [task, ...prev]);
-                  setNewTask({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me' });
+                  setNewTask({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me', recurrence: 'None' });
                 }} 
-                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3"
+                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3"
               >
-                <input 
-                  type="text" 
-                  placeholder="Assign task to Nuria..." 
-                  className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500"
-                  value={newTask.title}
-                  onChange={e => setNewTask({...newTask, title: e.target.value})}
-                />
-                <div className="flex gap-3 md:w-auto w-full">
-                  <div className="relative flex-1 md:flex-none">
-                    <input 
-                      type="number" 
-                      placeholder="Mins" 
-                      className="w-full md:w-20 p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 text-gray-700 bg-white"
-                      value={newTask.duration}
-                      onChange={e => setNewTask({...newTask, duration: e.target.value})}
-                    />
+                <input type="text" placeholder="Assign task to Nuria..." className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+                <div className="flex flex-wrap gap-3">
+                  <div className="relative flex-1 min-w-[100px]">
+                    <input type="number" placeholder="Mins" className="w-full p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none text-sm" value={newTask.duration} onChange={e => setNewTask({...newTask, duration: e.target.value})} />
                     <span className="absolute right-2 top-2.5 text-gray-400 text-sm">m</span>
                   </div>
-                  <select 
-                    className="flex-1 md:flex-none p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 text-gray-700 bg-white"
-                    value={newTask.priority}
-                    onChange={e => setNewTask({...newTask, priority: e.target.value})}
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
+                    <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
                   </select>
-                </div>
-                <button type="submit" className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-                  <Plus size={18} /> Assign
-                </button>
-              </form>
-
-              {/* Nuria's Task List */}
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600">Nuria's Active Tasks</div>
-                <ul className="divide-y divide-gray-100">
-                  {nuriaTasks.filter(t => t.status === 'Todo').length === 0 && (
-                    <li className="p-6 text-center text-gray-400">Nuria has no active tasks.</li>
-                  )}
-                  {nuriaTasks.filter(t => t.status === 'Todo').map(task => (
-                    <li key={task.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <button onClick={() => toggleTaskStatus(task)} className="text-gray-300 hover:text-pink-500 transition-colors shrink-0">
-                          <Circle size={22} />
-                        </button>
-                        <div className="truncate">
-                          <p className="text-gray-800 font-medium truncate">{task.title}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            {task.duration > 0 && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                                <Clock size={10} /> {task.duration}m
-                              </span>
-                            )}
-                            {task.priority && (
-                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${getPriorityStyles(task.priority)}`}>
-                                <Flag size={10} /> {task.priority}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4">
-                        <Trash2 size={18} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="p-4 border-y border-gray-100 bg-gray-50 font-medium text-gray-600 mt-4">Nuria's Completed Tasks</div>
-                <ul className="divide-y divide-gray-100 opacity-75">
-                  {nuriaTasks.filter(t => t.status === 'Done').map(task => (
-                    <li key={task.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <button onClick={() => toggleTaskStatus(task)} className="text-emerald-500 hover:text-gray-400 transition-colors shrink-0">
-                          <CheckCircle2 size={22} />
-                        </button>
-                        <div className="truncate">
-                          <p className="text-gray-500 line-through truncate">{task.title}</p>
-                        </div>
-                      </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4">
-                        <Trash2 size={18} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          );
-
-          const renderDocuments = () => (
-            <div className="space-y-6 animate-in">
-              <form onSubmit={handleAddDocument} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Document Title" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
-                    value={newDocument.title}
-                    onChange={e => setNewDocument({...newDocument, title: e.target.value})}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Document URL (link to Google Doc, Notion, etc)" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
-                    value={newDocument.url}
-                    onChange={e => setNewDocument({...newDocument, url: e.target.value})}
-                  />
-                </div>
-                <input 
-                  type="text" 
-                  placeholder="Short description or context (optional)" 
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 text-sm"
-                  value={newDocument.description}
-                  onChange={e => setNewDocument({...newDocument, description: e.target.value})}
-                />
-                <div className="flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
-                    <BookOpen size={18} /> Add Document
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.recurrence} onChange={e => setNewTask({...newTask, recurrence: e.target.value})}>
+                    <option value="None">Does not recur</option><option value="Weekly">Weekly</option><option value="Monthly">Monthly</option>
+                  </select>
+                  <button type="submit" className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-colors min-w-[100px]">
+                    <Plus size={16} /> Assign
                   </button>
                 </div>
               </form>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {documents.length === 0 && (
-                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
-                    No important documents saved yet.
-                  </div>
-                )}
-                {documents.map(doc => (
-                  <div key={doc.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col group relative">
-                    <button onClick={() => deleteDocument(doc.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={16} />
-                    </button>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-cyan-50 text-cyan-600 rounded-lg"><BookOpen size={18} /></div>
-                      <h4 className="font-bold text-gray-800 pr-6 truncate">{doc.title}</h4>
-                    </div>
-                    {doc.description && <p className="text-gray-600 text-sm mb-4 flex-1">{doc.description}</p>}
-                    
-                    <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-end">
-                      {doc.url && (
-                        <a 
-                          href={doc.url.startsWith('http') ? doc.url : `https://${doc.url}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-cyan-600 hover:text-cyan-800 text-sm font-medium flex items-center gap-1"
-                        >
-                          Open Document <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {taskView === 'kanban' ? renderKanban(nuriaTasks) : renderList(nuriaTasks)}
             </div>
           );
 
-          const renderNotes = () => (
+          const renderSettings = () => (
             <div className="space-y-6 animate-in">
-              <form onSubmit={handleAddNote} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <textarea 
-                  placeholder="Jot down quick information, ideas, or links..." 
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none h-24 text-gray-700"
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                />
-                <div className="flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 font-medium transition-colors">
-                    <Plus size={18} /> Save Note
-                  </button>
-                </div>
-              </form>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {notes.length === 0 && (
-                  <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100 border-dashed">
-                    No notes yet.
-                  </div>
-                )}
-                {notes.map(note => (
-                  <div key={note.id} className="bg-[#fffdf2] p-5 rounded-xl border border-amber-100 shadow-sm group relative">
-                    <button onClick={() => deleteNote(note.id)} className="absolute top-3 right-3 text-amber-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={16} />
+                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
+                        <Download size={20} className="text-blue-500" /> Export Backup
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">Download a complete backup of your Work OS data as a JSON file. Use this to transfer your data to a new computer or browser.</p>
+                    <button onClick={exportData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors text-sm">
+                        <Download size={16} /> Download Backup (.json)
                     </button>
-                    <p className="text-gray-800 whitespace-pre-wrap pr-4 text-sm">{note.content}</p>
-                    <div className="mt-4 pt-3 border-t border-amber-200/50 text-xs text-amber-600/60 font-medium">
-                      {new Date(note.dateCreated).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                </div>
+                
+                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
+                        <Upload size={20} className="text-amber-500" /> Import Backup
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">Upload a previously downloaded backup file. <strong>Warning:</strong> This will overwrite all of your current data.</p>
+                    <input type="file" accept=".json" onChange={importData} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer"/>
+                </div>
+
+                <div className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm mt-8">
+                    <h3 className="text-lg font-bold text-red-800 flex items-center gap-2 mb-2">
+                        <Trash2 size={20} className="text-red-500" /> Danger Zone
+                    </h3>
+                    <p className="text-sm text-red-600/80 mb-4">Permanently delete all data from this browser. This cannot be undone unless you have a backup.</p>
+                    <button onClick={() => {
+                        if(confirm('Are you absolutely sure? This will wipe ALL tasks, tools, meetings, and notes permanently.')) {
+                            localStorage.clear();
+                            window.location.reload();
+                        }
+                    }} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors text-sm">
+                        <Trash2 size={16} /> Wipe All Data
+                    </button>
+                </div>
             </div>
           );
 
@@ -1403,22 +661,21 @@
             <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
               <aside className="w-full md:w-64 bg-white border-r border-gray-200 md:min-h-screen flex flex-col">
                 <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-                  <div className="p-2 bg-slate-900 rounded-lg text-white">
-                    <Briefcase size={20} />
-                  </div>
+                  <div className="p-2 bg-slate-900 rounded-lg text-white"><Briefcase size={20} /></div>
                   <h1 className="font-bold text-xl text-slate-900">Work OS</h1>
                 </div>
-                <nav className="flex-1 p-4 space-y-1">
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                   {[
                     { id: 'dashboard', label: 'Dashboard & Summary', icon: LayoutDashboard },
                     { id: 'tasks', label: 'Tasks & To-dos', icon: CheckSquare },
                     { id: 'direct-reports', label: 'Direct Reports', icon: Users },
                     { id: 'meetings', label: 'Meetings & Time', icon: Clock },
-                    { id: 'insights', label: 'Insights & Capacity', icon: Activity },
+                    { id: 'insights', label: 'Insights & Review', icon: Activity },
                     { id: 'documents', label: 'Important Docs', icon: BookOpen },
                     { id: 'tools', label: 'Tool Portfolio', icon: Wrench },
                     { id: 'notes', label: 'Information Log', icon: FileText },
                     { id: 'team-love', label: 'Team Love', icon: Heart },
+                    { id: 'settings', label: 'Settings & Backup', icon: Settings },
                   ].map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -1426,48 +683,91 @@
                       <button
                         key={item.id}
                         onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${
-                          isActive 
-                            ? 'bg-slate-900 text-white shadow-md' 
-                            : 'text-gray-600 hover:bg-gray-100 hover:text-slate-900'
-                        }`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${isActive ? 'bg-slate-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100 hover:text-slate-900'}`}
                       >
-                        <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} />
-                        {item.label}
+                        <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} /> {item.label}
                       </button>
                     )
                   })}
                 </nav>
               </aside>
 
-              <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
+              <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen relative">
                 <header className="mb-8">
                   <h2 className="text-2xl font-bold text-slate-900 capitalize flex items-center gap-3">
                     {activeTab.replace('-', ' ')}
                   </h2>
-                  <p className="text-slate-500 mt-1 text-sm">
-                    {activeTab === 'dashboard' && "Overview and automated weekly reporting."}
-                    {activeTab === 'tasks' && "Manage your actionable items and link them to goals."}
-                    {activeTab === 'direct-reports' && "Manage tasks and view capacity for your direct reports."}
-                    {activeTab === 'meetings' && "Log meetings to track where your time goes."}
-                    {activeTab === 'insights' && "Review your workload distribution and capacity history."}
-                    {activeTab === 'documents' && "Quick access to your most important files and links."}
-                    {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
-                    {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
-                    {activeTab === 'team-love' && "A record of positive feedback and shoutouts."}
-                  </p>
                 </header>
 
-                {activeTab === 'dashboard' && renderDashboard()}
+                {/* Dashboard & Summary */}
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-8 animate-in">
+                        {/* Weekly Capacity Card */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
+                            <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                <Battery size={20} className="text-blue-500" /> This Week's Capacity (40h)
+                            </h3>
+                            <span className={`font-bold px-3 py-1 rounded-full text-sm ${capacityStats.remainingHours < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {capacityStats.remainingHours}h Remaining
+                            </span>
+                            </div>
+                            
+                            <div className="w-full bg-gray-100 rounded-full h-6 mb-4 flex overflow-hidden shadow-inner">
+                            <div className="h-6 transition-all border-r border-white/20 last:border-0 flex items-center justify-center text-[10px] text-white font-bold" style={{ width: `${(capacityStats.meetingHours / 40) * 100}%`, backgroundColor: GOAL_COLORS['Meetings'] }} title={`Meetings: ${capacityStats.meetingHours}h`}>
+                                {capacityStats.meetingHours > 1 && 'Mtg'}
+                            </div>
+                            {Object.entries(capacityStats.tasksByGoal).map(([goal, hours]) => {
+                                if (Number(hours) === 0) return null;
+                                return (
+                                <div key={goal} className="h-6 transition-all border-r border-white/20 last:border-0 flex items-center justify-center text-[10px] text-white font-bold" style={{ width: `${(Number(hours) / 40) * 100}%`, backgroundColor: GOAL_COLORS[goal] || GOAL_COLORS['Unassigned'] }} title={`${goal}: ${hours}h`}></div>
+                                );
+                            })}
+                            </div>
+
+                            <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium bg-gray-50 p-4 rounded-lg">
+                            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS['Meetings']}}></span> Meetings: {capacityStats.meetingHours}h</span>
+                            {Object.entries(capacityStats.tasksByGoal).map(([goal, hours]) => {
+                                if (Number(hours) === 0) return null;
+                                return (
+                                <span key={goal} className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS[goal] || GOAL_COLORS['Unassigned']}}></span> {goal}: {hours}h</span>
+                                );
+                            })}
+                            </div>
+                        </div>
+                        {/* Weekly Summary Auto-Gen */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileText size={20} className="text-gray-500" /> Auto-Generated Weekly Summary</h3>
+                            </div>
+                            <textarea readOnly value={`Weekly Summary (${new Date().toLocaleDateString()})\n\nTasks Completed (${myTasks.filter(t => t.status === 'Done').length}):\n${myTasks.filter(t => t.status === 'Done').map(t => `  - ${t.title}`).join('\n')}`} className="w-full h-40 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"/>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'insights' && (
+                    <div className="space-y-6 animate-in">
+                         {/* Performance Review Exporter */}
+                         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 p-6 rounded-xl shadow-md text-white">
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <h3 className="text-lg font-bold flex items-center gap-2"><Award size={20} className="text-yellow-400"/> Quarterly Performance Review Generator</h3>
+                                    <p className="text-blue-100 text-sm mt-1">Automatically generates a self-evaluation based on your last 90 days of work, tools, and feedback.</p>
+                                </div>
+                                <button onClick={() => { navigator.clipboard.writeText(quarterlyReviewReport); alert("Copied to clipboard!"); }} className="px-4 py-2 bg-white text-indigo-900 hover:bg-gray-100 rounded-lg flex items-center gap-2 font-bold text-sm transition-colors shrink-0">
+                                    <Copy size={16} /> Copy Report
+                                </button>
+                            </div>
+                            <textarea readOnly value={quarterlyReviewReport} className="w-full h-48 p-4 bg-white/10 border border-white/20 rounded-lg text-sm font-mono text-white resize-none focus:outline-none"/>
+                        </div>
+                    </div>
+                )}
+
+                {/* Direct calling of views */}
                 {activeTab === 'tasks' && renderTasks()}
                 {activeTab === 'direct-reports' && renderDirectReports()}
-                {activeTab === 'meetings' && renderMeetings()}
-                {activeTab === 'insights' && renderInsights()}
-                {activeTab === 'documents' && renderDocuments()}
-                {activeTab === 'tools' && renderTools()}
-                {activeTab === 'notes' && renderNotes()}
-                {activeTab === 'team-love' && renderTeamLove()}
-                
+                {activeTab === 'settings' && renderSettings()}
+
               </main>
             </div>
           );
