@@ -19,20 +19,20 @@
         .animate-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
-        /* Custom scrollbar for kanban */
-        .kanban-scroll::-webkit-scrollbar {
+        /* Custom scrollbar for kanban and other overflow areas */
+        .custom-scroll::-webkit-scrollbar {
             height: 8px;
             width: 8px;
         }
-        .kanban-scroll::-webkit-scrollbar-track {
+        .custom-scroll::-webkit-scrollbar-track {
             background: #f1f5f9; 
             border-radius: 4px;
         }
-        .kanban-scroll::-webkit-scrollbar-thumb {
+        .custom-scroll::-webkit-scrollbar-thumb {
             background: #cbd5e1; 
             border-radius: 4px;
         }
-        .kanban-scroll::-webkit-scrollbar-thumb:hover {
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
             background: #94a3b8; 
         }
     </style>
@@ -49,7 +49,8 @@
           Trash2, Copy, CheckCircle2, Circle, Briefcase, ExternalLink, 
           Clock, PieChart, CalendarDays, Flag, Battery, AlignLeft, ListTodo,
           Heart, BookOpen, Activity, History, Edit3, Users, Settings, 
-          Download, Upload, KanbanSquare, List, Repeat, Award
+          Download, Upload, KanbanSquare, List, Repeat, Award, Search, 
+          Filter, ChevronDown, ChevronUp, AlertCircle, Calendar
         } from 'https://esm.sh/lucide-react@0.344.0?deps=react@18.2.0';
         import {
           LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -66,18 +67,19 @@
         ];
 
         const GOAL_COLORS = {
-          'New Business': '#3b82f6', // blue-500
-          'Retention': '#10b981', // emerald-500
-          'Process Optimization': '#f59e0b', // amber-500
-          'Client Work': '#8b5cf6', // violet-500
-          'People Management': '#ec4899', // pink-500
-          'Admin Work': '#64748b', // slate-500
-          'Unassigned': '#9ca3af', // gray-400
-          'Meetings': '#6366f1' // indigo-500
+          'New Business': '#3b82f6', 
+          'Retention': '#10b981', 
+          'Process Optimization': '#f59e0b', 
+          'Client Work': '#8b5cf6', 
+          'People Management': '#ec4899', 
+          'Admin Work': '#64748b', 
+          'Unassigned': '#9ca3af', 
+          'Meetings': '#6366f1' 
         };
 
         const TASK_STATUSES = ['Todo', 'In Progress', 'Blocked', 'Done'];
 
+        // --- HELPER FUNCTIONS ---
         const getMonday = (dateString) => {
           if (!dateString) return null;
           const date = new Date(dateString);
@@ -99,6 +101,164 @@
           return defaultValue;
         };
 
+        const isOverdue = (dueDateString) => {
+            if (!dueDateString) return false;
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const dueDate = new Date(dueDateString);
+            // Adjust to midnight to accurately compare days
+            dueDate.setHours(0,0,0,0);
+            return dueDate < today;
+        };
+
+        const getPriorityStyles = (priority) => {
+            switch(priority) {
+              case 'High': return 'bg-red-50 text-red-600 border-red-100';
+              case 'Medium': return 'bg-amber-50 text-amber-600 border-amber-100';
+              case 'Low': return 'bg-slate-50 text-slate-600 border-slate-100';
+              default: return 'bg-gray-50 text-gray-600 border-gray-100';
+            }
+        };
+
+        // --- SUB-COMPONENTS (Defined outside App to prevent focus loss issues) ---
+        
+        const TaskSubtasks = ({ task, onAddSubtask, onToggleSubtask, onDeleteSubtask }) => {
+            const [newSubtask, setNewSubtask] = useState('');
+            
+            const handleAdd = (e) => {
+                e.preventDefault();
+                if (!newSubtask.trim()) return;
+                onAddSubtask(task.id, newSubtask);
+                setNewSubtask('');
+            };
+
+            const subtasks = task.subtasks || [];
+            const completedCount = subtasks.filter(st => st.completed).length;
+
+            return (
+                <div className="mt-3 pt-3 border-t border-slate-100 animate-in">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Sub-Tasks</span>
+                        {subtasks.length > 0 && (
+                            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                                {completedCount} / {subtasks.length}
+                            </span>
+                        )}
+                    </div>
+                    
+                    <ul className="space-y-1.5 mb-3">
+                        {subtasks.map(st => (
+                            <li key={st.id} className="flex items-start gap-2 group/sub">
+                                <button 
+                                    onClick={() => onToggleSubtask(task.id, st.id)} 
+                                    className={`mt-0.5 shrink-0 ${st.completed ? 'text-emerald-500' : 'text-slate-300 hover:text-blue-500'}`}
+                                >
+                                    {st.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                                </button>
+                                <span className={`text-xs flex-1 ${st.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                    {st.text}
+                                </span>
+                                <button 
+                                    onClick={() => onDeleteSubtask(task.id, st.id)}
+                                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover/sub:opacity-100 transition-opacity"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+
+                    <form onSubmit={handleAdd} className="flex gap-2">
+                        <input 
+                            type="text" 
+                            placeholder="Add sub-task..." 
+                            className="flex-1 text-xs p-1.5 border border-slate-200 rounded focus:outline-none focus:border-blue-400 bg-slate-50 focus:bg-white transition-colors"
+                            value={newSubtask}
+                            onChange={e => setNewSubtask(e.target.value)}
+                        />
+                        <button type="submit" className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 rounded transition-colors">
+                            <Plus size={14} />
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const TaskCard = ({ task, onDragStart, onDelete, onStatusChange, onAddSubtask, onToggleSubtask, onDeleteSubtask }) => {
+            const [expanded, setExpanded] = useState(false);
+            const overdue = task.status !== 'Done' && isOverdue(task.dueDate);
+
+            return (
+                <div 
+                    draggable 
+                    onDragStart={(e) => onDragStart(e, task.id)} 
+                    className={`bg-white p-3 rounded-lg shadow-sm border cursor-move hover:shadow-md transition-shadow group ${overdue ? 'border-red-300' : 'border-gray-100'}`}
+                >
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                        <p className={`text-gray-800 font-medium text-sm leading-tight flex-1 ${task.status === 'Done' ? 'line-through text-gray-400' : ''}`}>
+                            {task.title}
+                        </p>
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => setExpanded(!expanded)} className="text-slate-400 hover:text-blue-500 transition-colors p-1 bg-slate-50 hover:bg-blue-50 rounded">
+                                {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                            <button onClick={() => onDelete(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        {task.dueDate && (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${overdue ? 'bg-red-50 text-red-600 border-red-200 font-bold' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                {overdue ? <AlertCircle size={10} /> : <Calendar size={10} />} 
+                                {new Date(task.dueDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                            </span>
+                        )}
+                        {task.duration > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200 text-gray-500">
+                            <Clock size={10} /> {task.duration}m
+                        </span>
+                        )}
+                        {task.priority && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${getPriorityStyles(task.priority)}`}>
+                            <Flag size={10} /> {task.priority}
+                        </span>
+                        )}
+                        {task.recurrence && task.recurrence !== 'None' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-purple-100 bg-purple-50 text-purple-600">
+                                <Repeat size={10} /> {task.recurrence}
+                            </span>
+                        )}
+                        {task.subtasks && task.subtasks.length > 0 && !expanded && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 cursor-pointer" onClick={() => setExpanded(true)}>
+                                <ListTodo size={10} /> {task.subtasks.filter(s=>s.completed).length}/{task.subtasks.length}
+                            </span>
+                        )}
+                    </div>
+                    
+                    {task.goal && (
+                        <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                                <Target size={10} /> {task.goal}
+                            </span>
+                        </div>
+                    )}
+
+                    {expanded && (
+                        <TaskSubtasks 
+                            task={task} 
+                            onAddSubtask={onAddSubtask} 
+                            onToggleSubtask={onToggleSubtask} 
+                            onDeleteSubtask={onDeleteSubtask} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
+
+        // --- MAIN APP COMPONENT ---
         function App() {
           const [activeTab, setActiveTab] = useState('dashboard');
           const [taskView, setTaskView] = useState('list'); // 'list' or 'kanban'
@@ -111,8 +271,12 @@
           const [teamLove, setTeamLove] = useState(() => loadLocalData('work_os_team_love', []));
           const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
 
+          // --- GLOBAL SEARCH & FILTER STATE ---
+          const [searchQuery, setSearchQuery] = useState('');
+          const [taskFilter, setTaskFilter] = useState({ goal: 'All', priority: 'All' });
+
           // --- FORM STATES ---
-          const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me', recurrence: 'None' });
+          const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me', recurrence: 'None', dueDate: '' });
           const [newTool, setNewTool] = useState({ title: '', description: '', url: '', goal: '' });
           const [newNote, setNewNote] = useState('');
           const [newMeeting, setNewMeeting] = useState({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
@@ -140,20 +304,15 @@
               goal: newTask.goal, 
               priority: newTask.priority,
               duration: Number(newTask.duration) || 0,
+              dueDate: newTask.dueDate || null,
               assignee: forceAssignee || newTask.assignee || 'Me',
               recurrence: newTask.recurrence || 'None',
+              subtasks: [],
               dateCreated: new Date().toISOString(),
               dateCompleted: null 
             };
             setTasks(prev => [task, ...prev]);
-            setNewTask({ 
-              title: '', 
-              goal: '', 
-              priority: 'Medium', 
-              duration: '', 
-              assignee: forceAssignee || 'Me', 
-              recurrence: 'None' 
-            });
+            setNewTask({ title: '', goal: '', priority: 'Medium', duration: '', dueDate: '', assignee: forceAssignee || 'Me', recurrence: 'None' });
           };
 
           const handleTaskStatusChange = (taskId, newStatus) => {
@@ -173,10 +332,24 @@
 
               // Handle Auto-Recurrence
               if (isCompleting && task.recurrence && task.recurrence !== 'None') {
+                  // Calculate new due date if one existed
+                  let newDueDate = null;
+                  if (task.dueDate) {
+                      const d = new Date(task.dueDate);
+                      if (task.recurrence === 'Weekly') d.setDate(d.getDate() + 7);
+                      if (task.recurrence === 'Monthly') d.setMonth(d.getMonth() + 1);
+                      newDueDate = d.toISOString().split('T')[0];
+                  }
+
+                  // Clone task and uncheck subtasks
+                  const clonedSubtasks = (task.subtasks || []).map(st => ({...st, completed: false}));
+
                   const nextTask = {
                       ...task,
                       id: Date.now().toString() + Math.random().toString(36).substring(7),
                       status: 'Todo',
+                      dueDate: newDueDate,
+                      subtasks: clonedSubtasks,
                       dateCreated: new Date().toISOString(),
                       dateCompleted: null
                   };
@@ -189,28 +362,52 @@
 
           const deleteTask = (id) => setTasks(prev => prev.filter(t => t.id !== id));
 
+          // Subtask Handlers
+          const handleAddSubtask = (taskId, text) => {
+              setTasks(prev => prev.map(t => {
+                  if (t.id === taskId) {
+                      const newSub = { id: Date.now().toString(), text, completed: false };
+                      return { ...t, subtasks: [...(t.subtasks || []), newSub] };
+                  }
+                  return t;
+              }));
+          };
+
+          const toggleSubtask = (taskId, subtaskId) => {
+              setTasks(prev => prev.map(t => {
+                  if (t.id === taskId) {
+                      const updatedSubs = (t.subtasks || []).map(st => 
+                          st.id === subtaskId ? { ...st, completed: !st.completed } : st
+                      );
+                      return { ...t, subtasks: updatedSubs };
+                  }
+                  return t;
+              }));
+          };
+
+          const deleteSubtask = (taskId, subtaskId) => {
+              setTasks(prev => prev.map(t => {
+                  if (t.id === taskId) {
+                      return { ...t, subtasks: (t.subtasks || []).filter(st => st.id !== subtaskId) };
+                  }
+                  return t;
+              }));
+          };
+
           const handleAddTool = (e) => {
             e.preventDefault();
             if (!newTool.title) return;
-            setTools(prev => [
-              { id: Date.now().toString(), ...newTool, dateCreated: new Date().toISOString() }, 
-              ...prev
-            ]);
+            setTools(prev => [{ id: Date.now().toString(), ...newTool, dateCreated: new Date().toISOString() }, ...prev]);
             setNewTool({ title: '', description: '', url: '', goal: '' });
           };
-          
           const deleteTool = (id) => setTools(prev => prev.filter(t => t.id !== id));
 
           const handleAddNote = (e) => {
             e.preventDefault();
             if (!newNote) return;
-            setNotes(prev => [
-              { id: Date.now().toString(), content: newNote, dateCreated: new Date().toISOString() }, 
-              ...prev
-            ]);
+            setNotes(prev => [{ id: Date.now().toString(), content: newNote, dateCreated: new Date().toISOString() }, ...prev]);
             setNewNote('');
           };
-          
           const deleteNote = (id) => setNotes(prev => prev.filter(n => n.id !== id));
 
           const handleAddMeeting = (e) => {
@@ -229,6 +426,8 @@
                 duration: 15, 
                 assignee: 'Me', 
                 recurrence: 'None', 
+                dueDate: newMeeting.date, // Auto-assign meeting date as due date for action items
+                subtasks: [],
                 dateCreated: new Date().toISOString(), 
                 dateCompleted: null
               }));
@@ -246,7 +445,6 @@
             }, ...prev]);
             setNewMeeting({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
           };
-          
           const deleteMeeting = (id) => setMeetings(prev => prev.filter(m => m.id !== id));
 
           const startEditingMeeting = (meeting) => {
@@ -269,6 +467,8 @@
                 duration: 15, 
                 assignee: 'Me', 
                 recurrence: 'None', 
+                dueDate: meeting.date,
+                subtasks: [],
                 dateCreated: new Date().toISOString(), 
                 dateCompleted: null
               }));
@@ -285,27 +485,17 @@
           const handleAddTeamLove = (e) => {
             e.preventDefault();
             if (!newTeamLove.message) return;
-            setTeamLove(prev => [{ 
-              id: Date.now().toString(), 
-              ...newTeamLove, 
-              dateCreated: new Date().toISOString() 
-            }, ...prev]);
+            setTeamLove(prev => [{ id: Date.now().toString(), ...newTeamLove, dateCreated: new Date().toISOString() }, ...prev]);
             setNewTeamLove({ date: new Date().toISOString().split('T')[0], sender: '', message: '' });
           };
-          
           const deleteTeamLove = (id) => setTeamLove(prev => prev.filter(i => i.id !== id));
 
           const handleAddDocument = (e) => {
             e.preventDefault();
             if (!newDocument.title) return;
-            setDocuments(prev => [{ 
-              id: Date.now().toString(), 
-              ...newDocument, 
-              dateCreated: new Date().toISOString() 
-            }, ...prev]);
+            setDocuments(prev => [{ id: Date.now().toString(), ...newDocument, dateCreated: new Date().toISOString() }, ...prev]);
             setNewDocument({ title: '', url: '', description: '' });
           };
-          
           const deleteDocument = (id) => setDocuments(prev => prev.filter(i => i.id !== id));
 
           // Settings Backup & Restore Handlers
@@ -341,27 +531,29 @@
             reader.readAsText(file);
           };
 
-          // Kanban Drag & Drop
-          const handleDragStart = (e, taskId) => {
-            e.dataTransfer.setData('taskId', taskId);
-          };
+          // --- FILTERING & COMPUTED DATA ---
           
-          const handleDrop = (e, newStatus) => {
-            const taskId = e.dataTransfer.getData('taskId');
-            handleTaskStatusChange(taskId, newStatus);
-          };
+          // Global Search Filters
+          const globalSearchLower = searchQuery.toLowerCase();
           
-          const handleDragOver = (e) => {
-            e.preventDefault();
-          };
+          const filteredTasks = useMemo(() => {
+              return tasks.filter(t => {
+                  const matchesSearch = t.title.toLowerCase().includes(globalSearchLower) || 
+                                        (t.subtasks && t.subtasks.some(st => st.text.toLowerCase().includes(globalSearchLower)));
+                  const matchesGoal = taskFilter.goal === 'All' || t.goal === taskFilter.goal || (!t.goal && taskFilter.goal === 'Unassigned');
+                  const matchesPriority = taskFilter.priority === 'All' || t.priority === taskFilter.priority;
+                  return matchesSearch && matchesGoal && matchesPriority;
+              });
+          }, [tasks, searchQuery, taskFilter]);
 
-          // --- COMPUTED DATA ---
-          const myTasks = useMemo(() => tasks.filter(t => !t.assignee || t.assignee === 'Me'), [tasks]);
-          const nuriaTasks = useMemo(() => tasks.filter(t => t.assignee === 'Nuria'), [tasks]);
+          const filteredTools = useMemo(() => tools.filter(t => t.title.toLowerCase().includes(globalSearchLower) || t.description.toLowerCase().includes(globalSearchLower)), [tools, searchQuery]);
+          const filteredNotes = useMemo(() => notes.filter(n => n.content.toLowerCase().includes(globalSearchLower)), [notes, searchQuery]);
+          const filteredMeetings = useMemo(() => meetings.filter(m => m.title.toLowerCase().includes(globalSearchLower) || (m.notes && m.notes.toLowerCase().includes(globalSearchLower))).sort((a, b) => new Date(b.date) - new Date(a.date)), [meetings, searchQuery]);
+          const filteredDocuments = useMemo(() => documents.filter(d => d.title.toLowerCase().includes(globalSearchLower) || (d.description && d.description.toLowerCase().includes(globalSearchLower))), [documents, searchQuery]);
+          const filteredTeamLove = useMemo(() => teamLove.filter(l => l.message.toLowerCase().includes(globalSearchLower) || (l.sender && l.sender.toLowerCase().includes(globalSearchLower))).sort((a,b) => new Date(b.date) - new Date(a.date)), [teamLove, searchQuery]);
 
-          const sortedMeetings = useMemo(() => {
-            return [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
-          }, [meetings]);
+          const myTasks = useMemo(() => filteredTasks.filter(t => !t.assignee || t.assignee === 'Me'), [filteredTasks]);
+          const nuriaTasks = useMemo(() => filteredTasks.filter(t => t.assignee === 'Nuria'), [filteredTasks]);
 
           const meetingStats = useMemo(() => {
             if (meetings.length === 0) return { totalHours: 0, avgWeeklyHours: 0, percentOfWeek: 0 };
@@ -394,7 +586,6 @@
             const monday = new Date(now);
             monday.setDate(now.getDate() - distanceToMonday);
             monday.setHours(0, 0, 0, 0);
-            
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
             sunday.setHours(23, 59, 59, 999);
@@ -405,7 +596,6 @@
               if (isNaN(mDate.getTime())) return false;
               return mDate >= monday && mDate <= sunday;
             });
-            
             const meetingMins = thisWeekMeetings.reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
             
             const tasksByGoal = {};
@@ -413,7 +603,9 @@
             tasksByGoal['Unassigned'] = 0;
 
             let totalTaskMins = 0;
-            myTasks.filter(t => {
+            // Note: capacity calculates from raw tasks, ignoring the search query filter so percentages stay accurate
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
+            rawMyTasks.filter(t => {
               if (t.status !== 'Done') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
@@ -433,9 +625,7 @@
             const remainingHours = 40 - meetingHours - taskHours;
 
             const tasksByGoalHours = {};
-            Object.keys(tasksByGoal).forEach(k => { 
-              tasksByGoalHours[k] = (tasksByGoal[k] / 60).toFixed(1); 
-            });
+            Object.keys(tasksByGoal).forEach(k => { tasksByGoalHours[k] = (tasksByGoal[k] / 60).toFixed(1); });
 
             return {
               meetingHours: meetingHours.toFixed(1),
@@ -443,7 +633,7 @@
               tasksByGoal: tasksByGoalHours,
               remainingHours: remainingHours.toFixed(1)
             };
-          }, [meetings, myTasks]);
+          }, [meetings, tasks]);
 
           const nuriaCapacityStats = useMemo(() => {
             const now = new Date();
@@ -451,12 +641,12 @@
             const monday = new Date(now);
             monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
             monday.setHours(0, 0, 0, 0);
-            
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
             sunday.setHours(23, 59, 59, 999);
 
-            const thisWeekTaskMins = nuriaTasks.filter(t => {
+            const rawNuriaTasks = tasks.filter(t => t.assignee === 'Nuria');
+            const thisWeekTaskMins = rawNuriaTasks.filter(t => {
               if (t.status !== 'Done') return true;
               if (t.status === 'Done' && t.dateCompleted) {
                 const cDate = new Date(t.dateCompleted);
@@ -471,10 +661,11 @@
               taskHours: taskHours.toFixed(1),
               remainingHours: (40 - taskHours).toFixed(1)
             };
-          }, [nuriaTasks]);
+          }, [tasks]);
 
           const historicalCapacity = useMemo(() => {
             const weeks = {};
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
 
             meetings.forEach(m => {
               const week = getMonday(m.date);
@@ -483,7 +674,7 @@
               weeks[week].meetingMins += (Number(m.duration) || 0);
             });
 
-            myTasks.forEach(t => {
+            rawMyTasks.forEach(t => {
               let week;
               if (t.status === 'Done' && t.dateCompleted) {
                 week = getMonday(t.dateCompleted);
@@ -507,11 +698,12 @@
                 remainingHours: remainingHours.toFixed(1)
               };
             }).sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
-          }, [meetings, myTasks]);
+          }, [meetings, tasks]);
 
           const weeklyGoalTrend = useMemo(() => {
             const weeks = {};
-            myTasks.filter(t => t.status === 'Done' && t.dateCompleted).forEach(t => {
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
+            rawMyTasks.filter(t => t.status === 'Done' && t.dateCompleted).forEach(t => {
                const week = getMonday(t.dateCompleted);
                if (!week) return;
                
@@ -536,7 +728,7 @@
                 });
                 return formattedWeek;
               });
-          }, [myTasks]);
+          }, [tasks]);
 
           const goalStats = useMemo(() => {
             const stats = STRATEGIC_GOALS.reduce((acc, goal) => {
@@ -546,8 +738,9 @@
             stats['Unassigned'] = { spent: 0, planned: 0, count: 0 };
 
             let totalAllSpentMins = 0;
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
 
-            myTasks.forEach(t => {
+            rawMyTasks.forEach(t => {
                 const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
                 if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
                 
@@ -573,13 +766,14 @@
                 };
             }).filter(g => g.count > 0 || g.goal !== 'Unassigned')
                .sort((a, b) => Number(b.totalHours) - Number(a.totalHours));
-          }, [myTasks]);
+          }, [tasks]);
 
           const weeklySummary = useMemo(() => {
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-            const completedTasks = myTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= oneWeekAgo);
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
+            const completedTasks = rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= oneWeekAgo);
             const recentTools = tools.filter(t => new Date(t.dateCreated) >= oneWeekAgo);
             const weeklyMeetings = meetings.filter(m => new Date(m.date) >= oneWeekAgo);
             const weeklyMeetingHours = (weeklyMeetings.reduce((acc, m) => acc + Number(m.duration), 0) / 60).toFixed(1);
@@ -603,13 +797,14 @@
             summaryText += `\n📅 Time in Meetings This Week: ${weeklyMeetingHours} hours\n`;
 
             return summaryText;
-          }, [myTasks, tools, meetings]);
+          }, [tasks, tools, meetings]);
 
           const quarterlyReviewReport = useMemo(() => {
             const ninetyDaysAgo = new Date();
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-            const qTasks = myTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo);
+            
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
+            const qTasks = rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo);
             const qTools = tools.filter(t => new Date(t.dateCreated) >= ninetyDaysAgo);
             const qLove = teamLove.filter(l => new Date(l.date) >= ninetyDaysAgo);
             
@@ -632,7 +827,7 @@
             qLove.forEach(l => report += `- "${l.message}" (From: ${l.sender || 'Anonymous'})\n`);
 
             return report;
-          }, [myTasks, tools, teamLove]);
+          }, [tasks, tools, teamLove]);
 
           const copyToClipboard = (text) => {
             navigator.clipboard.writeText(text).catch(err => {
@@ -645,78 +840,39 @@
             });
           };
 
-          // --- UI COMPONENTS ---
-          const getPriorityStyles = (priority) => {
-            switch(priority) {
-              case 'High': return 'bg-red-50 text-red-600 border-red-100';
-              case 'Medium': return 'bg-amber-50 text-amber-600 border-amber-100';
-              case 'Low': return 'bg-slate-50 text-slate-600 border-slate-100';
-              default: return 'bg-gray-50 text-gray-600 border-gray-100';
-            }
-          };
+          // --- VIEW RENDERERS ---
 
-          const TaskCard = ({ task }) => (
-            <div 
-                draggable 
-                onDragStart={(e) => handleDragStart(e, task.id)} 
-                className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 cursor-move hover:shadow-md transition-shadow group"
-            >
-                <div className="flex justify-between items-start mb-2">
-                    <p className={`text-gray-800 font-medium text-sm leading-tight pr-4 ${task.status === 'Done' ? 'line-through text-gray-400' : ''}`}>
-                        {task.title}
-                    </p>
-                    <button 
-                        onClick={() => deleteTask(task.id)} 
-                        className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    >
-                        <Trash2 size={14} />
-                    </button>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                    {task.duration > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200 text-gray-500">
-                        <Clock size={10} /> {task.duration}m
-                      </span>
-                    )}
-                    {task.priority && (
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${getPriorityStyles(task.priority)}`}>
-                        <Flag size={10} /> {task.priority}
-                      </span>
-                    )}
-                    {task.recurrence && task.recurrence !== 'None' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-purple-100 bg-purple-50 text-purple-600">
-                            <Repeat size={10} /> {task.recurrence}
-                        </span>
-                    )}
-                </div>
-                {task.goal && (
-                    <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                            <Target size={10} /> {task.goal}
-                        </span>
-                    </div>
-                )}
-            </div>
-          );
-
+          // Re-usable Kanban logic
           const renderKanban = (taskList) => (
-            <div className="flex gap-4 overflow-x-auto pb-4 h-[600px] kanban-scroll animate-in">
+            <div className="flex gap-4 overflow-x-auto pb-4 h-[600px] custom-scroll animate-in">
                 {TASK_STATUSES.map(status => (
                     <div 
                         key={status} 
-                        className="flex-1 min-w-[280px] bg-slate-100/50 p-4 rounded-xl border border-slate-200 flex flex-col"
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, status)}
+                        className="flex-1 min-w-[300px] bg-slate-100/50 p-4 rounded-xl border border-slate-200 flex flex-col"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                            const taskId = e.dataTransfer.getData('taskId');
+                            handleTaskStatusChange(taskId, status);
+                        }}
                     >
                         <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-bold text-slate-700 text-sm">{status}</h4>
+                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide">{status}</h4>
                             <span className="bg-white text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
                                 {taskList.filter(t => t.status === status).length}
                             </span>
                         </div>
-                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 kanban-scroll">
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scroll">
                             {taskList.filter(t => t.status === status).map(task => (
-                                <TaskCard key={task.id} task={task} />
+                                <TaskCard 
+                                    key={task.id} 
+                                    task={task} 
+                                    onDragStart={(e, id) => e.dataTransfer.setData('taskId', id)}
+                                    onDelete={deleteTask}
+                                    onStatusChange={handleTaskStatusChange}
+                                    onAddSubtask={handleAddSubtask}
+                                    onToggleSubtask={toggleSubtask}
+                                    onDeleteSubtask={deleteSubtask}
+                                />
                             ))}
                         </div>
                     </div>
@@ -728,21 +884,32 @@
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in">
                 <ul className="divide-y divide-gray-100">
                   {taskList.length === 0 && (
-                    <li className="p-6 text-center text-gray-400">No tasks found.</li>
+                    <li className="p-8 text-center text-gray-400 border border-dashed border-gray-200 m-4 rounded-lg">No tasks found. Try adjusting your filters.</li>
                   )}
-                  {taskList.map(task => (
-                    <li key={task.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 transition-colors group ${task.status === 'Done' ? 'opacity-75' : ''}`}>
-                      <div className="flex items-center gap-3 overflow-hidden mb-2 sm:mb-0">
+                  {taskList.map(task => {
+                    const overdue = task.status !== 'Done' && isOverdue(task.dueDate);
+                    const subtaskCount = task.subtasks ? task.subtasks.length : 0;
+                    const subtaskCompleted = task.subtasks ? task.subtasks.filter(s=>s.completed).length : 0;
+
+                    return (
+                    <li key={task.id} className={`p-4 flex flex-col sm:flex-row sm:items-start justify-between hover:bg-gray-50 transition-colors group ${task.status === 'Done' ? 'opacity-75' : ''}`}>
+                      <div className="flex items-start gap-3 overflow-hidden mb-2 sm:mb-0 flex-1">
                         <select 
                             value={task.status} 
                             onChange={(e) => handleTaskStatusChange(task.id, e.target.value)}
-                            className={`text-xs font-bold rounded-md px-2 py-1 border outline-none cursor-pointer ${task.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-slate-600 border-slate-200'}`}
+                            className={`mt-1 text-xs font-bold rounded-md px-2 py-1 border outline-none cursor-pointer shrink-0 ${task.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-slate-600 border-slate-200'}`}
                         >
                             {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
-                        <div className="truncate">
-                          <p className={`text-gray-800 font-medium truncate ${task.status === 'Done' ? 'line-through text-gray-500' : ''}`}>{task.title}</p>
+                        <div className="truncate flex-1">
+                          <p className={`text-gray-800 font-medium whitespace-normal ${task.status === 'Done' ? 'line-through text-gray-500' : ''}`}>{task.title}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {task.dueDate && (
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${overdue ? 'bg-red-50 text-red-600 border-red-200 font-bold' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                    {overdue ? <AlertCircle size={10} /> : <Calendar size={10} />} 
+                                    {new Date(task.dueDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                                </span>
+                            )}
                             {task.duration > 0 && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
                                 <Clock size={10} /> {task.duration}m
@@ -763,86 +930,117 @@
                                 <Target size={10} /> {task.goal}
                               </span>
                             )}
+                            {subtaskCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                <ListTodo size={10} /> {subtaskCompleted}/{subtaskCount} Subtasks
+                              </span>
+                            )}
                           </div>
+                          
+                          {/* Expanded List Subtasks */}
+                          <div className="mt-2 pl-1 border-l-2 border-slate-200">
+                             <TaskSubtasks 
+                                task={task} 
+                                onAddSubtask={handleAddSubtask} 
+                                onToggleSubtask={toggleSubtask} 
+                                onDeleteSubtask={deleteSubtask} 
+                            />
+                          </div>
+
                         </div>
                       </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4 self-end sm:self-auto">
+                      <button onClick={() => deleteTask(task.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4 self-start mt-2">
                         <Trash2 size={18} />
                       </button>
                     </li>
-                  ))}
+                  )})}
                 </ul>
             </div>
+          );
+
+          // Shared Task Filter/Controls
+          const TaskControls = () => (
+             <div className="flex flex-col md:flex-row justify-between items-center bg-white p-3 rounded-xl border border-gray-100 shadow-sm gap-3">
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <Filter size={16} className="text-slate-400" />
+                    <select 
+                        className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded outline-none focus:border-blue-400 text-slate-700"
+                        value={taskFilter.goal}
+                        onChange={e => setTaskFilter({...taskFilter, goal: e.target.value})}
+                    >
+                        <option value="All">All Goals</option>
+                        <option value="Unassigned">Unassigned</option>
+                        {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                    <select 
+                        className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded outline-none focus:border-blue-400 text-slate-700"
+                        value={taskFilter.priority}
+                        onChange={e => setTaskFilter({...taskFilter, priority: e.target.value})}
+                    >
+                        <option value="All">All Priorities</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto justify-center">
+                    <button onClick={() => setTaskView('list')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 w-full justify-center ${taskView === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><List size={16}/> List</button>
+                    <button onClick={() => setTaskView('kanban')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 w-full justify-center ${taskView === 'kanban' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><KanbanSquare size={16}/> Board</button>
+                </div>
+              </div>
           );
 
           // --- TAB RENDERERS ---
           const renderTasks = () => (
             <div className="space-y-6 animate-in">
-              <div className="flex justify-between items-center bg-white p-2 px-4 rounded-xl border border-gray-100 shadow-sm">
-                <span className="text-sm font-bold text-gray-600">My Task Pipeline</span>
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setTaskView('list')} 
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <List size={16}/> List
-                    </button>
-                    <button 
-                        onClick={() => setTaskView('kanban')} 
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'kanban' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <KanbanSquare size={16}/> Board
-                    </button>
-                </div>
-              </div>
+              
+              <TaskControls />
 
-              <form onSubmit={(e) => handleAddTask(e, 'Me')} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+              <form onSubmit={(e) => handleAddTask(e, 'Me')} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-4">
                 <input 
                     type="text" 
                     placeholder="What needs to be done?" 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" 
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-lg font-medium" 
                     value={newTask.title} 
                     onChange={e => setNewTask({...newTask, title: e.target.value})} 
                 />
                 <div className="flex flex-wrap gap-3">
-                  <div className="relative flex-1 min-w-[100px]">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Clock size={14} className="text-gray-400" />
+                    </div>
                     <input 
                         type="number" 
                         placeholder="Mins" 
-                        className="w-full p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none text-sm" 
+                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" 
                         value={newTask.duration} 
                         onChange={e => setNewTask({...newTask, duration: e.target.value})} 
                     />
-                    <span className="absolute right-2 top-2.5 text-gray-400 text-sm">m</span>
                   </div>
-                  <select 
-                    className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" 
-                    value={newTask.priority} 
-                    onChange={e => setNewTask({...newTask, priority: e.target.value})}
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                  <div className="relative flex-1 min-w-[140px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Calendar size={14} className="text-gray-400" />
+                    </div>
+                    <input 
+                        type="date" 
+                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" 
+                        value={newTask.dueDate} 
+                        onChange={e => setNewTask({...newTask, dueDate: e.target.value})} 
+                        title="Due Date"
+                    />
+                  </div>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
+                    <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
                   </select>
-                  <select 
-                    className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" 
-                    value={newTask.recurrence} 
-                    onChange={e => setNewTask({...newTask, recurrence: e.target.value})}
-                  >
-                    <option value="None">Does not recur</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.recurrence} onChange={e => setNewTask({...newTask, recurrence: e.target.value})}>
+                    <option value="None">Does not recur</option><option value="Weekly">Weekly</option><option value="Monthly">Monthly</option>
                   </select>
-                  <select 
-                    className="flex-1 min-w-[150px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" 
-                    value={newTask.goal} 
-                    onChange={e => setNewTask({...newTask, goal: e.target.value})}
-                  >
+                  <select className="flex-1 min-w-[150px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.goal} onChange={e => setNewTask({...newTask, goal: e.target.value})}>
                     <option value="">Select Goal</option>
                     {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
-                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-colors min-w-[100px]">
-                    <Plus size={16} /> Add
+                  <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors min-w-[120px]">
+                    <Plus size={16} /> Create Task
                   </button>
                 </div>
               </form>
@@ -870,65 +1068,46 @@
                 </div>
               </div>
 
-              <div className="flex justify-between items-center bg-white p-2 px-4 rounded-xl border border-gray-100 shadow-sm">
-                <span className="text-sm font-bold text-gray-600">Nuria's Pipeline</span>
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setTaskView('list')} 
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'list' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500'}`}
-                    >
-                        <List size={16}/> List
-                    </button>
-                    <button 
-                        onClick={() => setTaskView('kanban')} 
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${taskView === 'kanban' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500'}`}
-                    >
-                        <KanbanSquare size={16}/> Board
-                    </button>
-                </div>
-              </div>
+              <TaskControls />
 
               <form 
                 onSubmit={(e) => handleAddTask(e, 'Nuria')} 
-                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3"
+                className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-4"
               >
                 <input 
                     type="text" 
                     placeholder="Assign task to Nuria..." 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20" 
+                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20 text-lg font-medium" 
                     value={newTask.title} 
                     onChange={e => setNewTask({...newTask, title: e.target.value})} 
                 />
                 <div className="flex flex-wrap gap-3">
-                  <div className="relative flex-1 min-w-[100px]">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock size={14} className="text-gray-400" /></div>
                     <input 
                         type="number" 
                         placeholder="Mins" 
-                        className="w-full p-2 pr-6 border border-gray-200 rounded-lg focus:outline-none text-sm" 
+                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" 
                         value={newTask.duration} 
                         onChange={e => setNewTask({...newTask, duration: e.target.value})} 
                     />
-                    <span className="absolute right-2 top-2.5 text-gray-400 text-sm">m</span>
                   </div>
-                  <select 
-                    className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" 
-                    value={newTask.priority} 
-                    onChange={e => setNewTask({...newTask, priority: e.target.value})}
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                  <div className="relative flex-1 min-w-[140px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={14} className="text-gray-400" /></div>
+                    <input 
+                        type="date" 
+                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" 
+                        value={newTask.dueDate} 
+                        onChange={e => setNewTask({...newTask, dueDate: e.target.value})} 
+                    />
+                  </div>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
+                    <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
                   </select>
-                  <select 
-                    className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" 
-                    value={newTask.recurrence} 
-                    onChange={e => setNewTask({...newTask, recurrence: e.target.value})}
-                  >
-                    <option value="None">Does not recur</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
+                  <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.recurrence} onChange={e => setNewTask({...newTask, recurrence: e.target.value})}>
+                    <option value="None">Does not recur</option><option value="Weekly">Weekly</option><option value="Monthly">Monthly</option>
                   </select>
-                  <button type="submit" className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-colors min-w-[100px]">
+                  <button type="submit" className="px-6 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors min-w-[120px]">
                     <Plus size={16} /> Assign
                   </button>
                 </div>
@@ -959,42 +1138,15 @@
 
               <form onSubmit={handleAddMeeting} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Meeting Topic / Title" 
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
-                    value={newMeeting.title} 
-                    onChange={e => setNewMeeting({...newMeeting, title: e.target.value})} 
-                  />
-                  <input 
-                    type="date" 
-                    className="p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" 
-                    value={newMeeting.date} 
-                    onChange={e => setNewMeeting({...newMeeting, date: e.target.value})} 
-                  />
+                  <input type="text" placeholder="Meeting Topic / Title" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value={newMeeting.title} onChange={e => setNewMeeting({...newMeeting, title: e.target.value})} />
+                  <input type="date" className="p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" value={newMeeting.date} onChange={e => setNewMeeting({...newMeeting, date: e.target.value})} />
                   <div className="relative">
-                    <input 
-                        type="number" 
-                        placeholder="Duration" 
-                        className="w-32 p-2 pr-12 border border-gray-200 rounded-lg focus:outline-none" 
-                        value={newMeeting.duration} 
-                        onChange={e => setNewMeeting({...newMeeting, duration: e.target.value})} 
-                    />
+                    <input type="number" placeholder="Duration" className="w-32 p-2 pr-12 border border-gray-200 rounded-lg focus:outline-none" value={newMeeting.duration} onChange={e => setNewMeeting({...newMeeting, duration: e.target.value})} />
                     <span className="absolute right-3 top-2.5 text-gray-400 text-sm">min</span>
                   </div>
                 </div>
-                <textarea 
-                    placeholder="Meeting Notes..." 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-16 text-sm" 
-                    value={newMeeting.notes} 
-                    onChange={e => setNewMeeting({...newMeeting, notes: e.target.value})} 
-                />
-                <textarea 
-                    placeholder="Action Items (1 per line = Auto To-Do)" 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-16 text-sm" 
-                    value={newMeeting.actionItems} 
-                    onChange={e => setNewMeeting({...newMeeting, actionItems: e.target.value})} 
-                />
+                <textarea placeholder="Meeting Notes..." className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-16 text-sm" value={newMeeting.notes} onChange={e => setNewMeeting({...newMeeting, notes: e.target.value})} />
+                <textarea placeholder="Action Items (1 per line = Auto To-Do)" className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-16 text-sm" value={newMeeting.actionItems} onChange={e => setNewMeeting({...newMeeting, actionItems: e.target.value})} />
                 <div className="flex justify-end">
                   <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 font-medium">
                     <Plus size={18} /> Log Meeting
@@ -1007,8 +1159,8 @@
                   <CalendarDays size={18} /> Meeting Log
                 </div>
                 <ul className="divide-y divide-gray-100">
-                  {sortedMeetings.length === 0 && <li className="p-6 text-center text-gray-400">No meetings logged yet.</li>}
-                  {sortedMeetings.map(meeting => {
+                  {filteredMeetings.length === 0 && <li className="p-6 text-center text-gray-400">No meetings logged yet.</li>}
+                  {filteredMeetings.map(meeting => {
                     const isEditing = editingMeetingId === meeting.id;
                     return (
                       <li key={meeting.id} className="p-4 flex flex-col hover:bg-gray-50 transition-colors group">
@@ -1018,19 +1170,11 @@
                             <p className="text-xs text-gray-500 mt-1">{new Date(meeting.date).toLocaleDateString()}</p>
                           </div>
                           <div className="flex items-center gap-4">
-                            <span className="font-mono text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-md hidden md:inline-block">
-                                {meeting.duration} min
-                            </span>
-                            <button 
-                                onClick={() => isEditing ? setEditingMeetingId(null) : startEditingMeeting(meeting)} 
-                                className="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded hover:bg-indigo-100 transition-colors text-sm font-medium flex items-center gap-2"
-                            >
+                            <span className="font-mono text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-md hidden md:inline-block">{meeting.duration} min</span>
+                            <button onClick={() => isEditing ? setEditingMeetingId(null) : startEditingMeeting(meeting)} className="text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded hover:bg-indigo-100 transition-colors text-sm font-medium flex items-center gap-2">
                               <Edit3 size={14} /> {isEditing ? 'Cancel' : 'Edit'}
                             </button>
-                            <button 
-                                onClick={() => deleteMeeting(meeting.id)} 
-                                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                            >
+                            <button onClick={() => deleteMeeting(meeting.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                               <Trash2 size={18} />
                             </button>
                           </div>
@@ -1038,20 +1182,10 @@
                         
                         {isEditing && (
                           <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in">
-                            <textarea 
-                                placeholder="Meeting Notes..." 
-                                className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-20 text-sm" 
-                                value={editMeetingForm.notes} 
-                                onChange={e => setEditMeetingForm({...editMeetingForm, notes: e.target.value})} 
-                            />
+                            <textarea placeholder="Meeting Notes..." className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-20 text-sm" value={editMeetingForm.notes} onChange={e => setEditMeetingForm({...editMeetingForm, notes: e.target.value})} />
                             <div>
                               <p className="text-xs font-bold text-gray-500 uppercase mb-2">Add New Action Items</p>
-                              <textarea 
-                                  placeholder="Enter 1 action item per line..." 
-                                  className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-20 text-sm" 
-                                  value={editMeetingForm.actionItems} 
-                                  onChange={e => setEditMeetingForm({...editMeetingForm, actionItems: e.target.value})} 
-                              />
+                              <textarea placeholder="Enter 1 action item per line..." className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-20 text-sm" value={editMeetingForm.actionItems} onChange={e => setEditMeetingForm({...editMeetingForm, actionItems: e.target.value})} />
                             </div>
                             <div className="flex justify-end">
                               <button onClick={() => saveMeetingEdits(meeting.id)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Save Changes</button>
@@ -1089,35 +1223,14 @@
             <div className="space-y-6 animate-in">
               <form onSubmit={handleAddTool} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                      type="text" 
-                      placeholder="Tool / Project Name" 
-                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" 
-                      value={newTool.title} 
-                      onChange={e => setNewTool({...newTool, title: e.target.value})} 
-                  />
-                  <input 
-                      type="text" 
-                      placeholder="URL Link (optional)" 
-                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" 
-                      value={newTool.url} 
-                      onChange={e => setNewTool({...newTool, url: e.target.value})} 
-                  />
-                  <select 
-                      className="md:w-64 p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" 
-                      value={newTool.goal} 
-                      onChange={e => setNewTool({...newTool, goal: e.target.value})}
-                  >
+                  <input type="text" placeholder="Tool / Project Name" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" value={newTool.title} onChange={e => setNewTool({...newTool, title: e.target.value})} />
+                  <input type="text" placeholder="URL Link (optional)" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" value={newTool.url} onChange={e => setNewTool({...newTool, url: e.target.value})} />
+                  <select className="md:w-64 p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" value={newTool.goal} onChange={e => setNewTool({...newTool, goal: e.target.value})}>
                     <option value="">Select Strategic Goal</option>
                     {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
                 </div>
-                <textarea 
-                    placeholder="What does this tool do?" 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-20" 
-                    value={newTool.description} 
-                    onChange={e => setNewTool({...newTool, description: e.target.value})} 
-                />
+                <textarea placeholder="What does this tool do?" className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none resize-none h-20" value={newTool.description} onChange={e => setNewTool({...newTool, description: e.target.value})} />
                 <div className="flex justify-end">
                   <button type="submit" className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 font-medium">
                     <Plus size={18} /> Log Tool
@@ -1126,8 +1239,8 @@
               </form>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {tools.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No tools logged yet.</div>}
-                {tools.map(tool => (
+                {filteredTools.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No tools found.</div>}
+                {filteredTools.map(tool => (
                   <div key={tool.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col group relative">
                     <button onClick={() => deleteTool(tool.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                     <div className="flex items-center gap-3 mb-2">
@@ -1148,12 +1261,7 @@
           const renderNotes = () => (
             <div className="space-y-6 animate-in">
               <form onSubmit={handleAddNote} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
-                <textarea 
-                    placeholder="Jot down quick information..." 
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-24 text-gray-700" 
-                    value={newNote} 
-                    onChange={e => setNewNote(e.target.value)} 
-                />
+                <textarea placeholder="Jot down quick information..." className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-24 text-gray-700" value={newNote} onChange={e => setNewNote(e.target.value)} />
                 <div className="flex justify-end">
                   <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 font-medium">
                     <Plus size={18} /> Save Note
@@ -1162,8 +1270,8 @@
               </form>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {notes.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No notes yet.</div>}
-                {notes.map(note => (
+                {filteredNotes.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No notes found.</div>}
+                {filteredNotes.map(note => (
                   <div key={note.id} className="bg-[#fffdf2] p-5 rounded-xl border border-amber-100 shadow-sm group relative">
                     <button onClick={() => deleteNote(note.id)} className="absolute top-3 right-3 text-amber-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                     <p className="text-gray-800 whitespace-pre-wrap pr-4 text-sm">{note.content}</p>
@@ -1178,28 +1286,10 @@
             <div className="space-y-6 animate-in">
               <form onSubmit={handleAddDocument} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                      type="text" 
-                      placeholder="Document Title" 
-                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" 
-                      value={newDocument.title} 
-                      onChange={e => setNewDocument({...newDocument, title: e.target.value})} 
-                  />
-                  <input 
-                      type="text" 
-                      placeholder="Document URL" 
-                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" 
-                      value={newDocument.url} 
-                      onChange={e => setNewDocument({...newDocument, url: e.target.value})} 
-                  />
+                  <input type="text" placeholder="Document Title" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" value={newDocument.title} onChange={e => setNewDocument({...newDocument, title: e.target.value})} />
+                  <input type="text" placeholder="Document URL" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" value={newDocument.url} onChange={e => setNewDocument({...newDocument, url: e.target.value})} />
                 </div>
-                <input 
-                    type="text" 
-                    placeholder="Short description (optional)" 
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none text-sm" 
-                    value={newDocument.description} 
-                    onChange={e => setNewDocument({...newDocument, description: e.target.value})} 
-                />
+                <input type="text" placeholder="Short description (optional)" className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none text-sm" value={newDocument.description} onChange={e => setNewDocument({...newDocument, description: e.target.value})} />
                 <div className="flex justify-end">
                   <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg flex items-center gap-2 font-medium">
                     <BookOpen size={18} /> Add Document
@@ -1208,8 +1298,8 @@
               </form>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {documents.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No documents saved yet.</div>}
-                {documents.map(doc => (
+                {filteredDocuments.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No documents found.</div>}
+                {filteredDocuments.map(doc => (
                   <div key={doc.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col group relative">
                     <button onClick={() => deleteDocument(doc.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                     <div className="flex items-center gap-3 mb-2">
@@ -1230,26 +1320,10 @@
             <div className="space-y-6 animate-in">
               <form onSubmit={handleAddTeamLove} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-col md:flex-row gap-3">
-                  <input 
-                      type="date" 
-                      className="p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" 
-                      value={newTeamLove.date} 
-                      onChange={e => setNewTeamLove({...newTeamLove, date: e.target.value})} 
-                  />
-                  <input 
-                      type="text" 
-                      placeholder="Who sent the love? (Optional)" 
-                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" 
-                      value={newTeamLove.sender} 
-                      onChange={e => setNewTeamLove({...newTeamLove, sender: e.target.value})} 
-                  />
+                  <input type="date" className="p-2 border border-gray-200 rounded-lg focus:outline-none bg-white" value={newTeamLove.date} onChange={e => setNewTeamLove({...newTeamLove, date: e.target.value})} />
+                  <input type="text" placeholder="Who sent the love? (Optional)" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none" value={newTeamLove.sender} onChange={e => setNewTeamLove({...newTeamLove, sender: e.target.value})} />
                 </div>
-                <textarea 
-                    placeholder="Paste the nice words here..." 
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-24 text-gray-700" 
-                    value={newTeamLove.message} 
-                    onChange={e => setNewTeamLove({...newTeamLove, message: e.target.value})} 
-                />
+                <textarea placeholder="Paste the nice words here..." className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-24 text-gray-700" value={newTeamLove.message} onChange={e => setNewTeamLove({...newTeamLove, message: e.target.value})} />
                 <div className="flex justify-end">
                   <button type="submit" className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg flex items-center gap-2 font-medium">
                     <Heart size={18} /> Save Team Love
@@ -1258,8 +1332,8 @@
               </form>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {teamLove.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No team love recorded yet.</div>}
-                {teamLove.sort((a,b) => new Date(b.date) - new Date(a.date)).map(love => (
+                {filteredTeamLove.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No team love found.</div>}
+                {filteredTeamLove.map(love => (
                   <div key={love.id} className="bg-rose-50 p-5 rounded-xl border border-rose-100 shadow-sm group relative">
                     <button onClick={() => deleteTeamLove(love.id)} className="absolute top-3 right-3 text-rose-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                     <Heart size={20} className="text-rose-400 mb-3" fill="currentColor" />
@@ -1310,7 +1384,6 @@
             </div>
           );
 
-          
           return (
             <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
               <aside className="w-full md:w-64 bg-white border-r border-gray-200 md:min-h-screen flex flex-col">
@@ -1336,7 +1409,10 @@
                     return (
                       <button
                         key={item.id}
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => {
+                            setActiveTab(item.id);
+                            setSearchQuery(''); // Clear search on tab switch
+                        }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${isActive ? 'bg-slate-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100 hover:text-slate-900'}`}
                       >
                         <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} /> {item.label}
@@ -1347,10 +1423,42 @@
               </aside>
 
               <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen relative">
-                <header className="mb-8">
-                  <h2 className="text-2xl font-bold text-slate-900 capitalize flex items-center gap-3">
-                    {activeTab.replace('-', ' ')}
-                  </h2>
+                
+                {/* Global Header with Search */}
+                <header className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900 capitalize flex items-center gap-3">
+                      {activeTab.replace('-', ' ')}
+                    </h2>
+                    <p className="text-slate-500 mt-1 text-sm max-w-xl">
+                        {activeTab === 'dashboard' && "Overview and automated weekly reporting."}
+                        {activeTab === 'tasks' && "Manage your actionable items and link them to goals."}
+                        {activeTab === 'direct-reports' && "Manage tasks and view capacity for your direct reports."}
+                        {activeTab === 'meetings' && "Log meetings to track where your time goes."}
+                        {activeTab === 'insights' && "Review your workload distribution and capacity history."}
+                        {activeTab === 'documents' && "Quick access to your most important files and links."}
+                        {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
+                        {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
+                        {activeTab === 'team-love' && "A record of positive feedback and shoutouts."}
+                        {activeTab === 'settings' && "Manage your local data backups."}
+                    </p>
+                  </div>
+                  
+                  {/* Global Search Bar */}
+                  {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && (
+                      <div className="relative w-full md:w-64">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Search size={16} className="text-slate-400" />
+                          </div>
+                          <input 
+                              type="text" 
+                              placeholder={`Search ${activeTab.replace('-', ' ')}...`}
+                              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm shadow-sm"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                      </div>
+                  )}
                 </header>
 
                 {activeTab === 'dashboard' && (
