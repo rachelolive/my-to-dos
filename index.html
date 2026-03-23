@@ -270,8 +270,13 @@
           const [meetings, setMeetings] = useState(() => loadLocalData('work_os_meetings', []));
           const [teamLove, setTeamLove] = useState(() => loadLocalData('work_os_team_love', []));
           const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
-          // --- NEW: Saved weekly summaries ---
+          // --- Saved weekly summaries ---
           const [savedSummaries, setSavedSummaries] = useState(() => loadLocalData('work_os_saved_summaries', []));
+          // --- Archived (completed) tasks from previous weeks ---
+          const [archivedTasks, setArchivedTasks] = useState(() => loadLocalData('work_os_archived_tasks', []));
+          // --- AI summary state ---
+          const [aiSummary, setAiSummary] = useState('');
+          const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
           // --- GLOBAL SEARCH & FILTER STATE ---
           const [searchQuery, setSearchQuery] = useState('');
@@ -295,15 +300,24 @@
           useEffect(() => { localStorage.setItem('work_os_team_love', JSON.stringify(teamLove)); }, [teamLove]);
           useEffect(() => { localStorage.setItem('work_os_documents', JSON.stringify(documents)); }, [documents]);
           useEffect(() => { localStorage.setItem('work_os_saved_summaries', JSON.stringify(savedSummaries)); }, [savedSummaries]);
+          useEffect(() => { localStorage.setItem('work_os_archived_tasks', JSON.stringify(archivedTasks)); }, [archivedTasks]);
 
-          // --- Reset 'Done' tasks every Monday ---
-          // Only wipe if a previous reset week exists AND it's now a different week.
-          // On first ever load (no stored key), we just record the current week without wiping anything.
+          // --- Reset 'Done' tasks every Monday, archiving them first ---
+          // Only runs when a previous week is recorded AND it differs from the current week.
+          // On first ever load (no stored key) we just record the current Monday without touching tasks.
           useEffect(() => {
             const currentMonday = getMonday(new Date().toISOString());
             const lastReset = localStorage.getItem('work_os_last_reset');
             if (lastReset && lastReset !== currentMonday) {
-              setTasks(prev => prev.filter(t => t.status !== 'Done'));
+              setTasks(prev => {
+                const doneTasks = prev.filter(t => t.status === 'Done');
+                if (doneTasks.length > 0) {
+                  // Stamp each archived task with the week it belonged to
+                  const stamped = doneTasks.map(t => ({ ...t, weekArchived: lastReset }));
+                  setArchivedTasks(archive => [...stamped, ...archive]);
+                }
+                return prev.filter(t => t.status !== 'Done');
+              });
             }
             localStorage.setItem('work_os_last_reset', currentMonday);
           }, []); // Runs once on mount
@@ -515,7 +529,7 @@
 
           // Settings Backup & Restore Handlers
           const exportData = () => {
-            const data = { tasks, tools, notes, meetings, teamLove, documents, savedSummaries };
+            const data = { tasks, tools, notes, meetings, teamLove, documents, savedSummaries, archivedTasks };
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -539,6 +553,7 @@
                 if (data.teamLove) setTeamLove(data.teamLove);
                 if (data.documents) setDocuments(data.documents);
                 if (data.savedSummaries) setSavedSummaries(data.savedSummaries);
+                if (data.archivedTasks) setArchivedTasks(data.archivedTasks);
                 alert('Data successfully imported!');
               } catch(err) {
                 alert('Invalid backup file. Could not import data.');
@@ -565,6 +580,39 @@
           };
 
           const deleteSavedSummary = (id) => setSavedSummaries(prev => prev.filter(s => s.id !== id));
+
+          // --- AI-powered summary generator ---
+          const generateAiSummary = async () => {
+            setAiSummaryLoading(true);
+            setAiSummary('');
+            try {
+              const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'claude-sonnet-4-5-20251022',
+                  max_tokens: 1000,
+                  messages: [{
+                    role: 'user',
+                    content: `You are a professional work assistant. Based on the raw weekly data below, write a polished, concise narrative status update (3-5 short paragraphs) that a manager could paste directly into an email or Slack. Use a confident, professional tone. Highlight accomplishments, key themes across the work, and anything notable. Do not use bullet points — write in flowing prose. Do not include a subject line.
+
+RAW DATA:
+${weeklySummary}`
+                  }]
+                })
+              });
+              const data = await response.json();
+              const text = data.content && data.content[0] && data.content[0].text;
+              if (text) {
+                setAiSummary(text);
+              } else {
+                setAiSummary('Could not generate summary. Please try again.');
+              }
+            } catch (err) {
+              setAiSummary('Error connecting to AI. Please try again.');
+            }
+            setAiSummaryLoading(false);
+          };
 
           // --- FILTERING & COMPUTED DATA ---
           
@@ -839,7 +887,13 @@
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
             
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
-            const qTasks = rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo);
+            // Include archived tasks so history survives the Monday reset
+            const rawMyArchived = archivedTasks.filter(t => !t.assignee || t.assignee === 'Me');
+            const allCompleted = [
+              ...rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo),
+              ...rawMyArchived.filter(t => t.dateCompleted && new Date(t.dateCompleted) >= ninetyDaysAgo)
+            ];
+            const qTasks = allCompleted;
             const qTools = tools.filter(t => new Date(t.dateCreated) >= ninetyDaysAgo);
             const qLove = teamLove.filter(l => new Date(l.date) >= ninetyDaysAgo);
             
@@ -862,7 +916,7 @@
             qLove.forEach(l => report += `- "${l.message}" (From: ${l.sender || 'Anonymous'})\n`);
 
             return report;
-          }, [tasks, tools, teamLove]);
+          }, [tasks, archivedTasks, tools, teamLove]);
 
           const copyToClipboard = (text) => {
             navigator.clipboard.writeText(text).catch(err => {
@@ -1607,8 +1661,22 @@
                         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileText size={20} className="text-gray-500" /> Auto-Generated Weekly Summary</h3>
-                                <div className="flex items-center gap-2">
-                                    {/* NEW: Save Summary button */}
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                    <button
+                                        onClick={generateAiSummary}
+                                        disabled={aiSummaryLoading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-all text-sm font-medium shadow-sm"
+                                    >
+                                        {aiSummaryLoading ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                                                </svg>
+                                                Writing...
+                                            </>
+                                        ) : '✨ AI Summary'}
+                                    </button>
                                     <button
                                         onClick={handleSaveSummary}
                                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
@@ -1620,7 +1688,36 @@
                                     </button>
                                 </div>
                             </div>
-                            <textarea readOnly value={weeklySummary} className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"/>
+                            <textarea readOnly value={weeklySummary} className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"/>
+
+                            {/* AI-generated narrative summary */}
+                            {(aiSummary || aiSummaryLoading) && (
+                                <div className="mt-4 pt-4 border-t border-gray-100 animate-in">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="text-sm font-bold text-violet-700 flex items-center gap-2">
+                                            <span className="text-base">✨</span> AI-Polished Narrative
+                                        </h4>
+                                        {aiSummary && !aiSummaryLoading && (
+                                            <button onClick={() => copyToClipboard(aiSummary)} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-lg text-sm font-medium transition-colors">
+                                                <Copy size={13} /> Copy
+                                            </button>
+                                        )}
+                                    </div>
+                                    {aiSummaryLoading ? (
+                                        <div className="p-6 bg-violet-50 rounded-lg border border-violet-100 flex items-center justify-center gap-3 text-violet-600 text-sm font-medium">
+                                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                                            </svg>
+                                            Generating polished summary...
+                                        </div>
+                                    ) : (
+                                        <div className="p-5 bg-violet-50 border border-violet-100 rounded-lg text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                                            {aiSummary}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
