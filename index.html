@@ -281,6 +281,7 @@
           // --- GLOBAL SEARCH & FILTER STATE ---
           const [searchQuery, setSearchQuery] = useState('');
           const [taskFilter, setTaskFilter] = useState({ goal: 'All', priority: 'All' });
+          const [archiveFilter, setArchiveFilter] = useState({ goal: 'All', assignee: 'All', search: '' });
 
           // --- FORM STATES ---
           const [newTask, setNewTask] = useState({ title: '', goal: '', priority: 'Medium', duration: '', assignee: 'Me', recurrence: 'None', dueDate: '' });
@@ -1482,6 +1483,184 @@ ${weeklySummary}`
             </div>
           );
 
+          const renderArchive = () => {
+            // Build list of unique assignees in the archive
+            const assignees = ['All', ...Array.from(new Set(archivedTasks.map(t => t.assignee || 'Me').filter(Boolean)))];
+
+            // Apply filters
+            const filtered = archivedTasks.filter(t => {
+              const matchesGoal = archiveFilter.goal === 'All' || t.goal === archiveFilter.goal || (!t.goal && archiveFilter.goal === 'Unassigned');
+              const matchesAssignee = archiveFilter.assignee === 'All' || (t.assignee || 'Me') === archiveFilter.assignee;
+              const matchesSearch = !archiveFilter.search || t.title.toLowerCase().includes(archiveFilter.search.toLowerCase());
+              return matchesGoal && matchesAssignee && matchesSearch;
+            });
+
+            // Group by weekArchived, sorted newest first
+            const groups = {};
+            filtered.forEach(t => {
+              const week = t.weekArchived || 'Unknown Week';
+              if (!groups[week]) groups[week] = [];
+              groups[week].push(t);
+            });
+            const sortedWeeks = Object.keys(groups).sort((a, b) => {
+              if (a === 'Unknown Week') return 1;
+              if (b === 'Unknown Week') return -1;
+              return new Date(b) - new Date(a);
+            });
+
+            // Stats
+            const totalHours = (archivedTasks.reduce((acc, t) => acc + (Number(t.duration) || 0), 0) / 60).toFixed(1);
+
+            return (
+              <div className="space-y-6 animate-in">
+
+                {/* Summary bar */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm text-center">
+                    <p className="text-3xl font-bold text-slate-800">{archivedTasks.length}</p>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Tasks Archived</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm text-center">
+                    <p className="text-3xl font-bold text-slate-800">{totalHours}h</p>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Total Hours Logged</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm text-center col-span-2 md:col-span-1">
+                    <p className="text-3xl font-bold text-slate-800">{sortedWeeks.length}</p>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Weeks on Record</p>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center">
+                  <Filter size={16} className="text-slate-400 shrink-0" />
+                  <div className="relative flex-1 w-full">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search size={14} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search archived tasks..."
+                      className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 text-sm"
+                      value={archiveFilter.search}
+                      onChange={e => setArchiveFilter(f => ({ ...f, search: e.target.value }))}
+                    />
+                  </div>
+                  <select
+                    className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto"
+                    value={archiveFilter.goal}
+                    onChange={e => setArchiveFilter(f => ({ ...f, goal: e.target.value }))}
+                  >
+                    <option value="All">All Goals</option>
+                    <option value="Unassigned">Unassigned</option>
+                    {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <select
+                    className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto"
+                    value={archiveFilter.assignee}
+                    onChange={e => setArchiveFilter(f => ({ ...f, assignee: e.target.value }))}
+                  >
+                    {assignees.map(a => <option key={a} value={a}>{a === 'All' ? 'All Assignees' : a}</option>)}
+                  </select>
+                  {(archiveFilter.goal !== 'All' || archiveFilter.assignee !== 'All' || archiveFilter.search) && (
+                    <button
+                      onClick={() => setArchiveFilter({ goal: 'All', assignee: 'All', search: '' })}
+                      className="text-xs text-slate-500 hover:text-red-500 font-medium px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 transition-colors whitespace-nowrap"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+
+                {/* Empty state */}
+                {archivedTasks.length === 0 && (
+                  <div className="p-12 text-center bg-white rounded-xl border border-dashed border-gray-200">
+                    <CheckCircle2 size={32} className="text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">No archived tasks yet.</p>
+                    <p className="text-gray-400 text-sm mt-1">Tasks marked Done are archived automatically every Monday.</p>
+                  </div>
+                )}
+
+                {filtered.length === 0 && archivedTasks.length > 0 && (
+                  <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200">
+                    <p className="text-gray-500">No tasks match your filters.</p>
+                  </div>
+                )}
+
+                {/* Grouped weeks */}
+                {sortedWeeks.map(week => {
+                  const weekTasks = groups[week];
+                  const weekHours = (weekTasks.reduce((acc, t) => acc + (Number(t.duration) || 0), 0) / 60).toFixed(1);
+                  const weekLabel = week === 'Unknown Week' ? 'Unknown Week' :
+                    new Date(week + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+                  // Goal breakdown for this week
+                  const goalBreakdown = {};
+                  weekTasks.forEach(t => {
+                    const g = t.goal || 'Unassigned';
+                    goalBreakdown[g] = (goalBreakdown[g] || 0) + 1;
+                  });
+
+                  return (
+                    <div key={week} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                      {/* Week header */}
+                      <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">Week of {weekLabel}</p>
+                          <div className="flex flex-wrap gap-2 mt-1.5">
+                            {Object.entries(goalBreakdown).map(([goal, count]) => (
+                              <span key={goal} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
+                                style={{ backgroundColor: (GOAL_COLORS[goal] || GOAL_COLORS['Unassigned']) + '18', borderColor: (GOAL_COLORS[goal] || GOAL_COLORS['Unassigned']) + '40', color: GOAL_COLORS[goal] || GOAL_COLORS['Unassigned'] }}>
+                                {goal}: {count}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">{weekTasks.length} tasks</span>
+                          <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">{weekHours}h logged</span>
+                        </div>
+                      </div>
+
+                      {/* Task rows */}
+                      <ul className="divide-y divide-gray-50">
+                        {weekTasks.map(task => (
+                          <li key={task.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors">
+                            <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-700 line-through truncate">{task.title}</p>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {task.goal && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                    <Target size={9} /> {task.goal}
+                                  </span>
+                                )}
+                                {task.duration > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                    <Clock size={9} /> {task.duration}m
+                                  </span>
+                                )}
+                                {task.assignee && task.assignee !== 'Me' && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-pink-50 text-pink-600">
+                                    {task.assignee}
+                                  </span>
+                                )}
+                                {task.dateCompleted && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                                    Completed {new Date(task.dateCompleted).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          };
+
           const renderSettings = () => (
             <div className="space-y-6 animate-in">
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -1534,6 +1713,7 @@ ${weeklySummary}`
                     { id: 'meetings', label: 'Meetings & Time', icon: Clock },
                     { id: 'insights', label: 'Insights & Review', icon: Activity },
                     { id: 'weekly-summaries', label: 'Weekly Summaries', icon: History },
+                    { id: 'archive', label: 'Task Archive', icon: CheckCircle2 },
                     { id: 'documents', label: 'Important Docs', icon: BookOpen },
                     { id: 'tools', label: 'Tool Portfolio', icon: Wrench },
                     { id: 'notes', label: 'Information Log', icon: FileText },
@@ -1558,6 +1738,11 @@ ${weeklySummary}`
                             {savedSummaries.length}
                           </span>
                         )}
+                        {item.id === 'archive' && archivedTasks.length > 0 && (
+                          <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {archivedTasks.length}
+                          </span>
+                        )}
                       </button>
                     )
                   })}
@@ -1579,6 +1764,7 @@ ${weeklySummary}`
                         {activeTab === 'meetings' && "Log meetings to track where your time goes."}
                         {activeTab === 'insights' && "Review your workload distribution and capacity history."}
                         {activeTab === 'weekly-summaries' && "Your saved weekly summaries, one per week."}
+                        {activeTab === 'archive' && "All completed tasks from previous weeks, grouped and searchable."}
                         {activeTab === 'documents' && "Quick access to your most important files and links."}
                         {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
                         {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
@@ -1588,7 +1774,7 @@ ${weeklySummary}`
                   </div>
                   
                   {/* Global Search Bar */}
-                  {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && activeTab !== 'weekly-summaries' && (
+                  {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && activeTab !== 'weekly-summaries' && activeTab !== 'archive' && (
                       <div className="relative w-full md:w-64">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                               <Search size={16} className="text-slate-400" />
@@ -1800,6 +1986,7 @@ ${weeklySummary}`
                 {activeTab === 'notes' && renderNotes()}
                 {activeTab === 'team-love' && renderTeamLove()}
                 {activeTab === 'weekly-summaries' && renderWeeklySummaries()}
+                {activeTab === 'archive' && renderArchive()}
                 {activeTab === 'settings' && renderSettings()}
 
               </main>
