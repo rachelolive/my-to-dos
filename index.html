@@ -640,26 +640,37 @@ ${weeklySummary}`
           const nuriaTasks = useMemo(() => filteredTasks.filter(t => t.assignee === 'Nuria'), [filteredTasks]);
 
           const meetingStats = useMemo(() => {
-            if (meetings.length === 0) return { totalHours: 0, avgWeeklyHours: 0, percentOfWeek: 0 };
-            
-            const totalMinutes = meetings.reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
-            const totalHours = totalMinutes / 60;
+            if (meetings.length === 0) return { thisWeekHours: '0.0', avgWeeklyHours: '0.0' };
 
-            const earliestMeeting = meetings.reduce((earliest, m) => {
-              const d = new Date(m.date);
-              return d < earliest ? d : earliest;
-            }, new Date());
+            // This week bounds (Mon–Sun)
+            const now = new Date();
+            const dow = now.getDay();
+            const mon = new Date(now);
+            mon.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+            mon.setHours(0, 0, 0, 0);
+            const sun = new Date(mon);
+            sun.setDate(mon.getDate() + 6);
+            sun.setHours(23, 59, 59, 999);
 
-            const daysActive = Math.max(1, (Date.now() - earliestMeeting.getTime()) / (1000 * 60 * 60 * 24));
-            const weeksActive = Math.max(1, daysActive / 7);
-            
-            const avgWeeklyHours = totalHours / weeksActive;
-            const percentOfWeek = (avgWeeklyHours / 40) * 100;
+            const thisWeekMins = meetings
+              .filter(m => { const d = new Date(m.date); return !isNaN(d) && d >= mon && d <= sun; })
+              .reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
+
+            // Average: group all meetings by week, then average the weekly totals
+            const weekBuckets = {};
+            meetings.forEach(m => {
+              const week = getMonday(m.date);
+              if (!week) return;
+              weekBuckets[week] = (weekBuckets[week] || 0) + (Number(m.duration) || 0);
+            });
+            const weekValues = Object.values(weekBuckets);
+            const avgMins = weekValues.length > 0
+              ? weekValues.reduce((a, b) => a + b, 0) / weekValues.length
+              : 0;
 
             return {
-              totalHours: totalHours.toFixed(1),
-              avgWeeklyHours: avgWeeklyHours.toFixed(1),
-              percentOfWeek: percentOfWeek.toFixed(1)
+              thisWeekHours: (thisWeekMins / 60).toFixed(1),
+              avgWeeklyHours: (avgMins / 60).toFixed(1),
             };
           }, [meetings]);
 
@@ -1216,8 +1227,8 @@ ${weeklySummary}`
                 </div>
                 <div className="flex gap-6">
                   <div className="text-center">
-                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.totalHours}h</p>
-                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">Total</p>
+                    <p className="text-3xl font-bold text-indigo-900">{meetingStats.thisWeekHours}h</p>
+                    <p className="text-xs text-indigo-700 font-medium uppercase tracking-wider">This Week</p>
                   </div>
                   <div className="text-center">
                     <p className="text-3xl font-bold text-indigo-900">{meetingStats.avgWeeklyHours}h</p>
