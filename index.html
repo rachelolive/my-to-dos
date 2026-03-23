@@ -270,6 +270,8 @@
           const [meetings, setMeetings] = useState(() => loadLocalData('work_os_meetings', []));
           const [teamLove, setTeamLove] = useState(() => loadLocalData('work_os_team_love', []));
           const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
+          // --- NEW: Saved weekly summaries ---
+          const [savedSummaries, setSavedSummaries] = useState(() => loadLocalData('work_os_saved_summaries', []));
 
           // --- GLOBAL SEARCH & FILTER STATE ---
           const [searchQuery, setSearchQuery] = useState('');
@@ -292,6 +294,19 @@
           useEffect(() => { localStorage.setItem('work_os_meetings', JSON.stringify(meetings)); }, [meetings]);
           useEffect(() => { localStorage.setItem('work_os_team_love', JSON.stringify(teamLove)); }, [teamLove]);
           useEffect(() => { localStorage.setItem('work_os_documents', JSON.stringify(documents)); }, [documents]);
+          useEffect(() => { localStorage.setItem('work_os_saved_summaries', JSON.stringify(savedSummaries)); }, [savedSummaries]);
+
+          // --- Reset 'Done' tasks every Monday ---
+          // Only wipe if a previous reset week exists AND it's now a different week.
+          // On first ever load (no stored key), we just record the current week without wiping anything.
+          useEffect(() => {
+            const currentMonday = getMonday(new Date().toISOString());
+            const lastReset = localStorage.getItem('work_os_last_reset');
+            if (lastReset && lastReset !== currentMonday) {
+              setTasks(prev => prev.filter(t => t.status !== 'Done'));
+            }
+            localStorage.setItem('work_os_last_reset', currentMonday);
+          }, []); // Runs once on mount
 
           // --- DATA HANDLERS ---
           const handleAddTask = (e, forceAssignee = null) => {
@@ -500,7 +515,7 @@
 
           // Settings Backup & Restore Handlers
           const exportData = () => {
-            const data = { tasks, tools, notes, meetings, teamLove, documents };
+            const data = { tasks, tools, notes, meetings, teamLove, documents, savedSummaries };
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -523,6 +538,7 @@
                 if (data.meetings) setMeetings(data.meetings);
                 if (data.teamLove) setTeamLove(data.teamLove);
                 if (data.documents) setDocuments(data.documents);
+                if (data.savedSummaries) setSavedSummaries(data.savedSummaries);
                 alert('Data successfully imported!');
               } catch(err) {
                 alert('Invalid backup file. Could not import data.');
@@ -530,6 +546,25 @@
             };
             reader.readAsText(file);
           };
+
+          // --- NEW: Save current weekly summary ---
+          const handleSaveSummary = () => {
+            const currentMonday = getMonday(new Date().toISOString());
+            const alreadySaved = savedSummaries.some(s => s.weekOf === currentMonday);
+            if (alreadySaved) {
+              if (!confirm('A summary for this week already exists. Overwrite it?')) return;
+              setSavedSummaries(prev => prev.filter(s => s.weekOf !== currentMonday));
+            }
+            const summaryRecord = {
+              id: Date.now().toString(),
+              content: weeklySummary,
+              dateSaved: new Date().toISOString(),
+              weekOf: currentMonday
+            };
+            setSavedSummaries(prev => [summaryRecord, ...prev]);
+          };
+
+          const deleteSavedSummary = (id) => setSavedSummaries(prev => prev.filter(s => s.id !== id));
 
           // --- FILTERING & COMPUTED DATA ---
           
@@ -1347,6 +1382,52 @@
             </div>
           );
 
+          // --- NEW: Render saved weekly summaries tab ---
+          const renderWeeklySummaries = () => (
+            <div className="space-y-4 animate-in">
+              {savedSummaries.length === 0 && (
+                <div className="p-12 text-center bg-white rounded-xl border border-dashed border-gray-200">
+                  <History size={32} className="text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium">No saved summaries yet.</p>
+                  <p className="text-gray-400 text-sm mt-1">Go to the Dashboard and click "Save Summary" to store a weekly record.</p>
+                </div>
+              )}
+              {savedSummaries.map(s => (
+                <div key={s.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="font-bold text-gray-800 text-base">
+                        Week of {new Date(s.weekOf + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Saved on {new Date(s.dateSaved).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-4">
+                      <button
+                        onClick={() => copyToClipboard(s.content)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        <Copy size={14} /> Copy
+                      </button>
+                      <button
+                        onClick={() => deleteSavedSummary(s.id)}
+                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1.5"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={s.content}
+                    className="w-full h-52 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          );
+
           const renderSettings = () => (
             <div className="space-y-6 animate-in">
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -1398,6 +1479,7 @@
                     { id: 'direct-reports', label: 'Direct Reports', icon: Users },
                     { id: 'meetings', label: 'Meetings & Time', icon: Clock },
                     { id: 'insights', label: 'Insights & Review', icon: Activity },
+                    { id: 'weekly-summaries', label: 'Weekly Summaries', icon: History },
                     { id: 'documents', label: 'Important Docs', icon: BookOpen },
                     { id: 'tools', label: 'Tool Portfolio', icon: Wrench },
                     { id: 'notes', label: 'Information Log', icon: FileText },
@@ -1415,7 +1497,13 @@
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${isActive ? 'bg-slate-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100 hover:text-slate-900'}`}
                       >
-                        <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} /> {item.label}
+                        <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} />
+                        {item.label}
+                        {item.id === 'weekly-summaries' && savedSummaries.length > 0 && (
+                          <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                            {savedSummaries.length}
+                          </span>
+                        )}
                       </button>
                     )
                   })}
@@ -1428,7 +1516,7 @@
                 <header className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900 capitalize flex items-center gap-3">
-                      {activeTab.replace('-', ' ')}
+                      {activeTab.replace(/-/g, ' ')}
                     </h2>
                     <p className="text-slate-500 mt-1 text-sm max-w-xl">
                         {activeTab === 'dashboard' && "Overview and automated weekly reporting."}
@@ -1436,6 +1524,7 @@
                         {activeTab === 'direct-reports' && "Manage tasks and view capacity for your direct reports."}
                         {activeTab === 'meetings' && "Log meetings to track where your time goes."}
                         {activeTab === 'insights' && "Review your workload distribution and capacity history."}
+                        {activeTab === 'weekly-summaries' && "Your saved weekly summaries, one per week."}
                         {activeTab === 'documents' && "Quick access to your most important files and links."}
                         {activeTab === 'tools' && "Log the utilities, scripts, or systems you build."}
                         {activeTab === 'notes' && "Quickly jot down information, links, or meeting notes."}
@@ -1445,14 +1534,14 @@
                   </div>
                   
                   {/* Global Search Bar */}
-                  {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && (
+                  {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && activeTab !== 'weekly-summaries' && (
                       <div className="relative w-full md:w-64">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                               <Search size={16} className="text-slate-400" />
                           </div>
                           <input 
                               type="text" 
-                              placeholder={`Search ${activeTab.replace('-', ' ')}...`}
+                              placeholder={`Search ${activeTab.replace(/-/g, ' ')}...`}
                               className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm shadow-sm"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
@@ -1518,9 +1607,18 @@
                         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileText size={20} className="text-gray-500" /> Auto-Generated Weekly Summary</h3>
-                                <button onClick={() => copyToClipboard(weeklySummary)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm font-medium">
-                                    <Copy size={16} /> Copy
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {/* NEW: Save Summary button */}
+                                    <button
+                                        onClick={handleSaveSummary}
+                                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                    >
+                                        <History size={16} /> Save Summary
+                                    </button>
+                                    <button onClick={() => copyToClipboard(weeklySummary)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm font-medium">
+                                        <Copy size={16} /> Copy
+                                    </button>
+                                </div>
                             </div>
                             <textarea readOnly value={weeklySummary} className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"/>
                         </div>
@@ -1604,6 +1702,7 @@
                 {activeTab === 'tools' && renderTools()}
                 {activeTab === 'notes' && renderNotes()}
                 {activeTab === 'team-love' && renderTeamLove()}
+                {activeTab === 'weekly-summaries' && renderWeeklySummaries()}
                 {activeTab === 'settings' && renderSettings()}
 
               </main>
