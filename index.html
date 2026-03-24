@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Work Tracker & Summary Dashboard</title>
     
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Load Babel to translate JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -19,28 +16,15 @@
         .animate-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
-        /* Custom scrollbar for kanban and other overflow areas */
-        .custom-scroll::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-        .custom-scroll::-webkit-scrollbar-track {
-            background: #f1f5f9; 
-            border-radius: 4px;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
+        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
-    <!-- This script tag type="text/babel" tells Babel to translate our React code -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
         import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
@@ -95,9 +79,7 @@
           try {
             const saved = localStorage.getItem(key);
             if (saved) return JSON.parse(saved);
-          } catch (e) { 
-            console.error(`Error loading ${key}`, e); 
-          }
+          } catch (e) { console.error(`Error loading ${key}`, e); }
           return defaultValue;
         };
 
@@ -106,7 +88,6 @@
             const today = new Date();
             today.setHours(0,0,0,0);
             const dueDate = new Date(dueDateString);
-            // Adjust to midnight to accurately compare days
             dueDate.setHours(0,0,0,0);
             return dueDate < today;
         };
@@ -120,7 +101,7 @@
             }
         };
 
-        // --- SUB-COMPONENTS (Defined outside App to prevent focus loss issues) ---
+        // --- SUB-COMPONENTS ---
         
         const TaskSubtasks = ({ task, onAddSubtask, onToggleSubtask, onDeleteSubtask }) => {
             const [newSubtask, setNewSubtask] = useState('');
@@ -145,7 +126,6 @@
                             </span>
                         )}
                     </div>
-                    
                     <ul className="space-y-1.5 mb-3">
                         {subtasks.map(st => (
                             <li key={st.id} className="flex items-start gap-2 group/sub">
@@ -167,7 +147,6 @@
                             </li>
                         ))}
                     </ul>
-
                     <form onSubmit={handleAdd} className="flex gap-2">
                         <input 
                             type="text" 
@@ -207,7 +186,6 @@
                             </button>
                         </div>
                     </div>
-                    
                     <div className="flex flex-wrap gap-1.5 mt-2">
                         {task.dueDate && (
                             <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${overdue ? 'bg-red-50 text-red-600 border-red-200 font-bold' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
@@ -216,14 +194,14 @@
                             </span>
                         )}
                         {task.duration > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200 text-gray-500">
-                            <Clock size={10} /> {task.duration}m
-                        </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200 text-gray-500">
+                                <Clock size={10} /> {task.duration}m
+                            </span>
                         )}
                         {task.priority && (
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${getPriorityStyles(task.priority)}`}>
-                            <Flag size={10} /> {task.priority}
-                        </span>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border ${getPriorityStyles(task.priority)}`}>
+                                <Flag size={10} /> {task.priority}
+                            </span>
                         )}
                         {task.recurrence && task.recurrence !== 'None' && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border border-purple-100 bg-purple-50 text-purple-600">
@@ -236,7 +214,6 @@
                             </span>
                         )}
                     </div>
-                    
                     {task.goal && (
                         <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
@@ -244,7 +221,6 @@
                             </span>
                         </div>
                     )}
-
                     {expanded && (
                         <TaskSubtasks 
                             task={task} 
@@ -261,7 +237,7 @@
         // --- MAIN APP COMPONENT ---
         function App() {
           const [activeTab, setActiveTab] = useState('dashboard');
-          const [taskView, setTaskView] = useState('list'); // 'list' or 'kanban'
+          const [taskView, setTaskView] = useState('list');
           
           // --- APP STATE ---
           const [tasks, setTasks] = useState(() => loadLocalData('work_os_tasks', []));
@@ -270,15 +246,12 @@
           const [meetings, setMeetings] = useState(() => loadLocalData('work_os_meetings', []));
           const [teamLove, setTeamLove] = useState(() => loadLocalData('work_os_team_love', []));
           const [documents, setDocuments] = useState(() => loadLocalData('work_os_documents', []));
-          // --- Saved weekly summaries ---
           const [savedSummaries, setSavedSummaries] = useState(() => loadLocalData('work_os_saved_summaries', []));
-          // --- Archived (completed) tasks from previous weeks ---
           const [archivedTasks, setArchivedTasks] = useState(() => loadLocalData('work_os_archived_tasks', []));
-          // --- AI summary state ---
           const [aiSummary, setAiSummary] = useState('');
           const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
-          // --- GLOBAL SEARCH & FILTER STATE ---
+          // --- SEARCH & FILTER STATE ---
           const [searchQuery, setSearchQuery] = useState('');
           const [taskFilter, setTaskFilter] = useState({ goal: 'All', priority: 'All' });
           const [archiveFilter, setArchiveFilter] = useState({ goal: 'All', assignee: 'All', search: '' });
@@ -304,8 +277,6 @@
           useEffect(() => { localStorage.setItem('work_os_archived_tasks', JSON.stringify(archivedTasks)); }, [archivedTasks]);
 
           // --- Reset 'Done' tasks every Monday, archiving them first ---
-          // Only runs when a previous week is recorded AND it differs from the current week.
-          // On first ever load (no stored key) we just record the current Monday without touching tasks.
           useEffect(() => {
             const currentMonday = getMonday(new Date().toISOString());
             const lastReset = localStorage.getItem('work_os_last_reset');
@@ -313,7 +284,6 @@
               setTasks(prev => {
                 const doneTasks = prev.filter(t => t.status === 'Done');
                 if (doneTasks.length > 0) {
-                  // Stamp each archived task with the week it belonged to
                   const stamped = doneTasks.map(t => ({ ...t, weekArchived: lastReset }));
                   setArchivedTasks(archive => [...stamped, ...archive]);
                 }
@@ -321,7 +291,7 @@
               });
             }
             localStorage.setItem('work_os_last_reset', currentMonday);
-          }, []); // Runs once on mount
+          }, []);
 
           // --- DATA HANDLERS ---
           const handleAddTask = (e, forceAssignee = null) => {
@@ -349,20 +319,15 @@
             setTasks(prev => {
               const taskIndex = prev.findIndex(t => t.id === taskId);
               if (taskIndex === -1) return prev;
-              
               const task = prev[taskIndex];
               const isCompleting = newStatus === 'Done' && task.status !== 'Done';
-              
               const updatedTasks = [...prev];
               updatedTasks[taskIndex] = {
                   ...task,
                   status: newStatus,
                   dateCompleted: newStatus === 'Done' ? new Date().toISOString() : null
               };
-
-              // Handle Auto-Recurrence
               if (isCompleting && task.recurrence && task.recurrence !== 'None') {
-                  // Calculate new due date if one existed
                   let newDueDate = null;
                   if (task.dueDate) {
                       const d = new Date(task.dueDate);
@@ -370,10 +335,7 @@
                       if (task.recurrence === 'Monthly') d.setMonth(d.getMonth() + 1);
                       newDueDate = d.toISOString().split('T')[0];
                   }
-
-                  // Clone task and uncheck subtasks
                   const clonedSubtasks = (task.subtasks || []).map(st => ({...st, completed: false}));
-
                   const nextTask = {
                       ...task,
                       id: Date.now().toString() + Math.random().toString(36).substring(7),
@@ -385,7 +347,6 @@
                   };
                   updatedTasks.push(nextTask);
               }
-
               return updatedTasks;
             });
           };
@@ -393,20 +354,17 @@
           const deleteTask = (id) => setTasks(prev => prev.filter(t => t.id !== id));
 
           const archiveTask = (task) => {
-            // Determine which week to stamp it to based on dateCompleted, or current week
             const weekStamp = task.dateCompleted
               ? getMonday(task.dateCompleted)
               : getMonday(new Date().toISOString());
             const stamped = { ...task, weekArchived: weekStamp };
             setArchivedTasks(prev => {
-              // Avoid duplicates
               if (prev.some(t => t.id === stamped.id)) return prev;
               return [stamped, ...prev];
             });
             setTasks(prev => prev.filter(t => t.id !== task.id));
           };
 
-          // Subtask Handlers
           const handleAddSubtask = (taskId, text) => {
               setTasks(prev => prev.map(t => {
                   if (t.id === taskId) {
@@ -458,34 +416,20 @@
             e.preventDefault();
             if (!newMeeting.title || !newMeeting.duration) return;
             const meetingId = Date.now().toString();
-            
             const actions = newMeeting.actionItems.split('\n').map(a => a.trim()).filter(a => a.length > 0);
             if (actions.length > 0) {
               const generatedTasks = actions.map((action, idx) => ({
                 id: meetingId + '-' + idx, 
-                title: action, 
-                status: 'Todo', 
-                goal: '', 
-                priority: 'Medium', 
-                duration: 15, 
-                assignee: 'Me', 
-                recurrence: 'None', 
-                dueDate: newMeeting.date, // Auto-assign meeting date as due date for action items
-                subtasks: [],
-                dateCreated: new Date().toISOString(), 
-                dateCompleted: null
+                title: action, status: 'Todo', goal: '', priority: 'Medium', duration: 15, 
+                assignee: 'Me', recurrence: 'None', dueDate: newMeeting.date,
+                subtasks: [], dateCreated: new Date().toISOString(), dateCompleted: null
               }));
               setTasks(prev => [...generatedTasks, ...prev]);
             }
-
             setMeetings(prev => [{ 
-              id: meetingId, 
-              title: newMeeting.title, 
-              date: newMeeting.date, 
-              duration: Number(newMeeting.duration), 
-              notes: newMeeting.notes, 
-              actionItems: actions, 
-              dateCreated: new Date().toISOString() 
+              id: meetingId, title: newMeeting.title, date: newMeeting.date, 
+              duration: Number(newMeeting.duration), notes: newMeeting.notes, 
+              actionItems: actions, dateCreated: new Date().toISOString() 
             }, ...prev]);
             setNewMeeting({ title: '', date: new Date().toISOString().split('T')[0], duration: '', notes: '', actionItems: '' });
           };
@@ -500,27 +444,16 @@
             const meeting = meetings.find(m => m.id === id);
             if (!meeting) return;
             const actions = editMeetingForm.actionItems.split('\n').map(a => a.trim()).filter(a => a.length > 0);
-            
             if (actions.length > 0) {
               const generatedTasks = actions.map((action, idx) => ({
-                id: Date.now().toString() + '-' + idx, 
-                title: action, 
-                status: 'Todo', 
-                goal: '', 
-                priority: 'Medium', 
-                duration: 15, 
-                assignee: 'Me', 
-                recurrence: 'None', 
-                dueDate: meeting.date,
-                subtasks: [],
-                dateCreated: new Date().toISOString(), 
-                dateCompleted: null
+                id: Date.now().toString() + '-' + idx, title: action, status: 'Todo', goal: '', 
+                priority: 'Medium', duration: 15, assignee: 'Me', recurrence: 'None', 
+                dueDate: meeting.date, subtasks: [], dateCreated: new Date().toISOString(), dateCompleted: null
               }));
               setTasks(prev => [...generatedTasks, ...prev]);
             }
             setMeetings(prev => prev.map(m => m.id === id ? { 
-              ...m, 
-              notes: editMeetingForm.notes, 
+              ...m, notes: editMeetingForm.notes, 
               actionItems: [...(m.actionItems || []), ...actions] 
             } : m));
             setEditingMeetingId(null);
@@ -542,7 +475,6 @@
           };
           const deleteDocument = (id) => setDocuments(prev => prev.filter(i => i.id !== id));
 
-          // Settings Backup & Restore Handlers
           const exportData = () => {
             const data = { tasks, tools, notes, meetings, teamLove, documents, savedSummaries, archivedTasks };
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
@@ -577,7 +509,6 @@
             reader.readAsText(file);
           };
 
-          // --- NEW: Save current weekly summary ---
           const handleSaveSummary = () => {
             const currentMonday = getMonday(new Date().toISOString());
             const alreadySaved = savedSummaries.some(s => s.weekOf === currentMonday);
@@ -596,7 +527,6 @@
 
           const deleteSavedSummary = (id) => setSavedSummaries(prev => prev.filter(s => s.id !== id));
 
-          // --- AI-powered summary generator ---
           const generateAiSummary = async () => {
             setAiSummaryLoading(true);
             setAiSummary('');
@@ -609,10 +539,7 @@
                   max_tokens: 1000,
                   messages: [{
                     role: 'user',
-                    content: `You are a professional work assistant. Based on the raw weekly data below, write a polished, concise narrative status update (3-5 short paragraphs) that a manager could paste directly into an email or Slack. Use a confident, professional tone. Highlight accomplishments, key themes across the work, and anything notable. Do not use bullet points — write in flowing prose. Do not include a subject line.
-
-RAW DATA:
-${weeklySummary}`
+                    content: `You are a professional work assistant. Based on the raw weekly data below, write a polished, concise narrative status update (3-5 short paragraphs) that a manager could paste directly into an email or Slack. Use a confident, professional tone. Highlight accomplishments, key themes across the work, and anything notable. Do not use bullet points — write in flowing prose. Do not include a subject line.\n\nRAW DATA:\n${weeklySummary}`
                   }]
                 })
               });
@@ -630,8 +557,6 @@ ${weeklySummary}`
           };
 
           // --- FILTERING & COMPUTED DATA ---
-          
-          // Global Search Filters
           const globalSearchLower = searchQuery.toLowerCase();
           
           const filteredTasks = useMemo(() => {
@@ -655,8 +580,6 @@ ${weeklySummary}`
 
           const meetingStats = useMemo(() => {
             if (meetings.length === 0) return { thisWeekHours: '0.0', avgWeeklyHours: '0.0' };
-
-            // This week bounds (Mon–Sun)
             const now = new Date();
             const dow = now.getDay();
             const mon = new Date(now);
@@ -665,12 +588,9 @@ ${weeklySummary}`
             const sun = new Date(mon);
             sun.setDate(mon.getDate() + 6);
             sun.setHours(23, 59, 59, 999);
-
             const thisWeekMins = meetings
               .filter(m => { const d = new Date(m.date); return !isNaN(d) && d >= mon && d <= sun; })
               .reduce((acc, m) => acc + (Number(m.duration) || 0), 0);
-
-            // Average: group all meetings by week, then average the weekly totals
             const weekBuckets = {};
             meetings.forEach(m => {
               const week = getMonday(m.date);
@@ -678,10 +598,7 @@ ${weeklySummary}`
               weekBuckets[week] = (weekBuckets[week] || 0) + (Number(m.duration) || 0);
             });
             const weekValues = Object.values(weekBuckets);
-            const avgMins = weekValues.length > 0
-              ? weekValues.reduce((a, b) => a + b, 0) / weekValues.length
-              : 0;
-
+            const avgMins = weekValues.length > 0 ? weekValues.reduce((a, b) => a + b, 0) / weekValues.length : 0;
             return {
               thisWeekHours: (thisWeekMins / 60).toFixed(1),
               avgWeeklyHours: (avgMins / 60).toFixed(1),
@@ -712,7 +629,6 @@ ${weeklySummary}`
             tasksByGoal['Unassigned'] = 0;
 
             let totalTaskMins = 0;
-            // Note: capacity calculates from raw tasks, ignoring the search query filter so percentages stay accurate
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
             rawMyTasks.filter(t => {
               if (t.status !== 'Done') return true;
@@ -732,7 +648,6 @@ ${weeklySummary}`
             const meetingHours = meetingMins / 60;
             const taskHours = totalTaskMins / 60;
             const remainingHours = 40 - meetingHours - taskHours;
-
             const tasksByGoalHours = {};
             Object.keys(tasksByGoal).forEach(k => { tasksByGoalHours[k] = (tasksByGoal[k] / 60).toFixed(1); });
 
@@ -753,7 +668,6 @@ ${weeklySummary}`
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
             sunday.setHours(23, 59, 59, 999);
-
             const rawNuriaTasks = tasks.filter(t => t.assignee === 'Nuria');
             const thisWeekTaskMins = rawNuriaTasks.filter(t => {
               if (t.status !== 'Done') return true;
@@ -764,7 +678,6 @@ ${weeklySummary}`
               }
               return false;
             }).reduce((acc, t) => acc + (Number(t.duration) || 0), 0);
-
             const taskHours = thisWeekTaskMins / 60;
             return {
               taskHours: taskHours.toFixed(1),
@@ -775,14 +688,12 @@ ${weeklySummary}`
           const historicalCapacity = useMemo(() => {
             const weeks = {};
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
-
             meetings.forEach(m => {
               const week = getMonday(m.date);
               if (!week) return;
               if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
               weeks[week].meetingMins += (Number(m.duration) || 0);
             });
-
             rawMyTasks.forEach(t => {
               let week;
               if (t.status === 'Done' && t.dateCompleted) {
@@ -790,12 +701,10 @@ ${weeklySummary}`
               } else if (t.status !== 'Done') {
                 week = getMonday(new Date().toISOString()); 
               }
-              
               if (!week) return;
               if (!weeks[week]) weeks[week] = { meetingMins: 0, taskMins: 0 };
               weeks[week].taskMins += (Number(t.duration) || 0);
             });
-
             return Object.entries(weeks).map(([weekStart, data]) => {
               const meetingHours = data.meetingMins / 60;
               const taskHours = data.taskMins / 60;
@@ -809,13 +718,27 @@ ${weeklySummary}`
             }).sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
           }, [meetings, tasks]);
 
+          // -----------------------------------------------------------------------
+          // FIX 1: weeklyGoalTrend — now includes archivedTasks so the chart shows
+          // history from weeks that have already been reset.
+          // -----------------------------------------------------------------------
           const weeklyGoalTrend = useMemo(() => {
             const weeks = {};
+
+            // Active tasks (mine) that are done
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
-            rawMyTasks.filter(t => t.status === 'Done' && t.dateCompleted).forEach(t => {
+            // Archived tasks (mine)
+            const rawMyArchived = archivedTasks.filter(t => !t.assignee || t.assignee === 'Me');
+
+            // Merge: active done + all archived (archived are always done by definition)
+            const allDone = [
+              ...rawMyTasks.filter(t => t.status === 'Done' && t.dateCompleted),
+              ...rawMyArchived.filter(t => t.dateCompleted)
+            ];
+
+            allDone.forEach(t => {
                const week = getMonday(t.dateCompleted);
                if (!week) return;
-               
                if (!weeks[week]) {
                    weeks[week] = { weekStart: week };
                    STRATEGIC_GOALS.forEach(g => weeks[week][g] = 0);
@@ -837,8 +760,12 @@ ${weeklySummary}`
                 });
                 return formattedWeek;
               });
-          }, [tasks]);
+          }, [tasks, archivedTasks]); // <-- archivedTasks added to deps
 
+          // -----------------------------------------------------------------------
+          // FIX 2: goalStats — archived completed tasks are now included in the
+          // "spent" hours breakdown so the Insights tab reflects full history.
+          // -----------------------------------------------------------------------
           const goalStats = useMemo(() => {
             const stats = STRATEGIC_GOALS.reduce((acc, goal) => {
                 acc[goal] = { spent: 0, planned: 0, count: 0 };
@@ -847,12 +774,16 @@ ${weeklySummary}`
             stats['Unassigned'] = { spent: 0, planned: 0, count: 0 };
 
             let totalAllSpentMins = 0;
-            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
 
+            // Active tasks (mine)
+            const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
+            // Archived tasks (mine) — these are always completed
+            const rawMyArchived = archivedTasks.filter(t => !t.assignee || t.assignee === 'Me');
+
+            // Process active tasks (spent if Done, planned if not)
             rawMyTasks.forEach(t => {
                 const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
                 if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
-                
                 stats[goalKey].count += 1;
                 if (t.status === 'Done') {
                     const mins = Number(t.duration) || 0;
@@ -861,6 +792,16 @@ ${weeklySummary}`
                 } else {
                     stats[goalKey].planned += (Number(t.duration) || 0);
                 }
+            });
+
+            // Process archived tasks — all count as spent
+            rawMyArchived.forEach(t => {
+                const goalKey = t.goal && STRATEGIC_GOALS.includes(t.goal) ? t.goal : 'Unassigned';
+                if (!stats[goalKey]) stats[goalKey] = { spent: 0, planned: 0, count: 0 };
+                stats[goalKey].count += 1;
+                const mins = Number(t.duration) || 0;
+                stats[goalKey].spent += mins;
+                totalAllSpentMins += mins;
             });
 
             return Object.entries(stats).map(([goal, data]) => {
@@ -875,45 +816,37 @@ ${weeklySummary}`
                 };
             }).filter(g => g.count > 0 || g.goal !== 'Unassigned')
                .sort((a, b) => Number(b.totalHours) - Number(a.totalHours));
-          }, [tasks]);
+          }, [tasks, archivedTasks]); // <-- archivedTasks added to deps
 
           const weeklySummary = useMemo(() => {
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
             const completedTasks = rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= oneWeekAgo);
             const recentTools = tools.filter(t => new Date(t.dateCreated) >= oneWeekAgo);
             const weeklyMeetings = meetings.filter(m => new Date(m.date) >= oneWeekAgo);
             const weeklyMeetingHours = (weeklyMeetings.reduce((acc, m) => acc + Number(m.duration), 0) / 60).toFixed(1);
-
             let summaryText = `Weekly Summary (${new Date().toLocaleDateString()})\n\n`;
-            
             summaryText += `✅ Tasks Completed (${completedTasks.length}):\n`;
             if (completedTasks.length === 0) summaryText += `  - No tasks completed this week.\n`;
             completedTasks.forEach(t => {
               const goalText = t.goal ? ` [${t.goal}]` : '';
               summaryText += `  - ${t.title}${goalText}\n`;
             });
-
             summaryText += `\n🛠️ Tools/Assets Created (${recentTools.length}):\n`;
             if (recentTools.length === 0) summaryText += `  - No new tools created this week.\n`;
             recentTools.forEach(t => {
               const goalText = t.goal ? ` [${t.goal}]` : '';
               summaryText += `  - ${t.title}: ${t.description}${goalText}\n`;
             });
-
             summaryText += `\n📅 Time in Meetings This Week: ${weeklyMeetingHours} hours\n`;
-
             return summaryText;
           }, [tasks, tools, meetings]);
 
           const quarterlyReviewReport = useMemo(() => {
             const ninetyDaysAgo = new Date();
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-            
             const rawMyTasks = tasks.filter(t => !t.assignee || t.assignee === 'Me');
-            // Include archived tasks so history survives the Monday reset
             const rawMyArchived = archivedTasks.filter(t => !t.assignee || t.assignee === 'Me');
             const allCompleted = [
               ...rawMyTasks.filter(t => t.status === 'Done' && new Date(t.dateCompleted) >= ninetyDaysAgo),
@@ -922,25 +855,20 @@ ${weeklySummary}`
             const qTasks = allCompleted;
             const qTools = tools.filter(t => new Date(t.dateCreated) >= ninetyDaysAgo);
             const qLove = teamLove.filter(l => new Date(l.date) >= ninetyDaysAgo);
-            
             const hoursLogged = (qTasks.reduce((acc, t) => acc + (Number(t.duration)||0), 0) / 60).toFixed(1);
-
             let report = `QUARTERLY PERFORMANCE REVIEW SUMMARY (Last 90 Days)\nGenerated: ${new Date().toLocaleDateString()}\n`;
             report += `====================================================\n\n`;
             report += `📊 HIGH-LEVEL METRICS\n`;
             report += `- Total Tasks Completed: ${qTasks.length}\n`;
             report += `- Total Project/Task Hours Logged: ${hoursLogged}h\n`;
             report += `- Tools & Systems Built: ${qTools.length}\n\n`;
-
             report += `🎯 TOP ACCOMPLISHMENTS (Tools Built)\n`;
             if(qTools.length === 0) report += `- None recorded.\n`;
             qTools.forEach(t => report += `- ${t.title}: ${t.description}\n`);
             report += `\n`;
-
             report += `💖 TEAM FEEDBACK & LOVE\n`;
             if(qLove.length === 0) report += `- None recorded.\n`;
             qLove.forEach(l => report += `- "${l.message}" (From: ${l.sender || 'Anonymous'})\n`);
-
             return report;
           }, [tasks, archivedTasks, tools, teamLove]);
 
@@ -957,7 +885,6 @@ ${weeklySummary}`
 
           // --- VIEW RENDERERS ---
 
-          // Re-usable Kanban logic
           const renderKanban = (taskList) => (
             <div className="flex gap-4 overflow-x-auto pb-4 h-[600px] custom-scroll animate-in">
                 {TASK_STATUSES.map(status => (
@@ -979,13 +906,10 @@ ${weeklySummary}`
                         <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scroll">
                             {taskList.filter(t => t.status === status).map(task => (
                                 <TaskCard 
-                                    key={task.id} 
-                                    task={task} 
+                                    key={task.id} task={task} 
                                     onDragStart={(e, id) => e.dataTransfer.setData('taskId', id)}
-                                    onDelete={deleteTask}
-                                    onStatusChange={handleTaskStatusChange}
-                                    onAddSubtask={handleAddSubtask}
-                                    onToggleSubtask={toggleSubtask}
+                                    onDelete={deleteTask} onStatusChange={handleTaskStatusChange}
+                                    onAddSubtask={handleAddSubtask} onToggleSubtask={toggleSubtask}
                                     onDeleteSubtask={deleteSubtask}
                                 />
                             ))}
@@ -1005,7 +929,6 @@ ${weeklySummary}`
                     const overdue = task.status !== 'Done' && isOverdue(task.dueDate);
                     const subtaskCount = task.subtasks ? task.subtasks.length : 0;
                     const subtaskCompleted = task.subtasks ? task.subtasks.filter(s=>s.completed).length : 0;
-
                     return (
                     <li key={task.id} className={`p-4 flex flex-col sm:flex-row sm:items-start justify-between hover:bg-gray-50 transition-colors group ${task.status === 'Done' ? 'opacity-75' : ''}`}>
                       <div className="flex items-start gap-3 overflow-hidden mb-2 sm:mb-0 flex-1">
@@ -1051,26 +974,17 @@ ${weeklySummary}`
                               </span>
                             )}
                           </div>
-                          
-                          {/* Expanded List Subtasks */}
                           <div className="mt-2 pl-1 border-l-2 border-slate-200">
                              <TaskSubtasks 
-                                task={task} 
-                                onAddSubtask={handleAddSubtask} 
-                                onToggleSubtask={toggleSubtask} 
-                                onDeleteSubtask={deleteSubtask} 
+                                task={task} onAddSubtask={handleAddSubtask} 
+                                onToggleSubtask={toggleSubtask} onDeleteSubtask={deleteSubtask} 
                             />
                           </div>
-
                         </div>
                       </div>
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-4 self-start mt-2">
                         {task.status === 'Done' && (
-                          <button
-                            onClick={() => archiveTask(task)}
-                            title="Archive this task"
-                            className="text-emerald-400 hover:text-emerald-600 transition-colors"
-                          >
+                          <button onClick={() => archiveTask(task)} title="Archive this task" className="text-emerald-400 hover:text-emerald-600 transition-colors">
                             <Archive size={16} />
                           </button>
                         )}
@@ -1084,7 +998,6 @@ ${weeklySummary}`
             </div>
           );
 
-          // Shared Task Filter/Controls
           const TaskControls = () => (
              <div className="flex flex-col md:flex-row justify-between items-center bg-white p-3 rounded-xl border border-gray-100 shadow-sm gap-3">
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -1119,41 +1032,21 @@ ${weeklySummary}`
           // --- TAB RENDERERS ---
           const renderTasks = () => (
             <div className="space-y-6 animate-in">
-              
               <TaskControls />
-
               <form onSubmit={(e) => handleAddTask(e, 'Me')} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-4">
                 <input 
-                    type="text" 
-                    placeholder="What needs to be done?" 
+                    type="text" placeholder="What needs to be done?" 
                     className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-lg font-medium" 
-                    value={newTask.title} 
-                    onChange={e => setNewTask({...newTask, title: e.target.value})} 
+                    value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} 
                 />
                 <div className="flex flex-wrap gap-3">
                   <div className="relative flex-1 min-w-[120px]">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Clock size={14} className="text-gray-400" />
-                    </div>
-                    <input 
-                        type="number" 
-                        placeholder="Mins" 
-                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" 
-                        value={newTask.duration} 
-                        onChange={e => setNewTask({...newTask, duration: e.target.value})} 
-                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock size={14} className="text-gray-400" /></div>
+                    <input type="number" placeholder="Mins" className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" value={newTask.duration} onChange={e => setNewTask({...newTask, duration: e.target.value})} />
                   </div>
                   <div className="relative flex-1 min-w-[140px]">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Calendar size={14} className="text-gray-400" />
-                    </div>
-                    <input 
-                        type="date" 
-                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" 
-                        value={newTask.dueDate} 
-                        onChange={e => setNewTask({...newTask, dueDate: e.target.value})} 
-                        title="Due Date"
-                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={14} className="text-gray-400" /></div>
+                    <input type="date" className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" value={newTask.dueDate} onChange={e => setNewTask({...newTask, dueDate: e.target.value})} title="Due Date" />
                   </div>
                   <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
                     <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
@@ -1170,7 +1063,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               {taskView === 'kanban' ? renderKanban(myTasks) : renderList(myTasks)}
             </div>
           );
@@ -1185,47 +1077,24 @@ ${weeklySummary}`
                   <div className="bg-pink-500 h-4 transition-all" style={{ width: `${(nuriaCapacityStats.taskHours / 40) * 100}%` }}></div>
                 </div>
                 <div className="flex justify-between text-sm text-gray-600 font-medium">
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-pink-500"></span> Tasks: {nuriaCapacityStats.taskHours}h
-                  </span>
-                  <span className={`font-bold ${nuriaCapacityStats.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                    {nuriaCapacityStats.remainingHours}h Remaining
-                  </span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-pink-500"></span> Tasks: {nuriaCapacityStats.taskHours}h</span>
+                  <span className={`font-bold ${nuriaCapacityStats.remainingHours < 0 ? 'text-red-500' : 'text-emerald-600'}`}>{nuriaCapacityStats.remainingHours}h Remaining</span>
                 </div>
               </div>
-
               <TaskControls />
-
-              <form 
-                onSubmit={(e) => handleAddTask(e, 'Nuria')} 
-                className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-4"
-              >
-                <input 
-                    type="text" 
-                    placeholder="Assign task to Nuria..." 
+              <form onSubmit={(e) => handleAddTask(e, 'Nuria')} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-4">
+                <input type="text" placeholder="Assign task to Nuria..." 
                     className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500/20 text-lg font-medium" 
-                    value={newTask.title} 
-                    onChange={e => setNewTask({...newTask, title: e.target.value})} 
+                    value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} 
                 />
                 <div className="flex flex-wrap gap-3">
                   <div className="relative flex-1 min-w-[120px]">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock size={14} className="text-gray-400" /></div>
-                    <input 
-                        type="number" 
-                        placeholder="Mins" 
-                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" 
-                        value={newTask.duration} 
-                        onChange={e => setNewTask({...newTask, duration: e.target.value})} 
-                    />
+                    <input type="number" placeholder="Mins" className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm" value={newTask.duration} onChange={e => setNewTask({...newTask, duration: e.target.value})} />
                   </div>
                   <div className="relative flex-1 min-w-[140px]">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={14} className="text-gray-400" /></div>
-                    <input 
-                        type="date" 
-                        className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" 
-                        value={newTask.dueDate} 
-                        onChange={e => setNewTask({...newTask, dueDate: e.target.value})} 
-                    />
+                    <input type="date" className="w-full p-2 pl-9 border border-gray-200 rounded-lg focus:outline-none text-sm text-slate-600 bg-white" value={newTask.dueDate} onChange={e => setNewTask({...newTask, dueDate: e.target.value})} />
                   </div>
                   <select className="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg focus:outline-none text-sm bg-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
                     <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
@@ -1238,7 +1107,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               {taskView === 'kanban' ? renderKanban(nuriaTasks) : renderList(nuriaTasks)}
             </div>
           );
@@ -1261,7 +1129,6 @@ ${weeklySummary}`
                   </div>
                 </div>
               </div>
-
               <form onSubmit={handleAddMeeting} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-col md:flex-row gap-3">
                   <input type="text" placeholder="Meeting Topic / Title" className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20" value={newMeeting.title} onChange={e => setNewMeeting({...newMeeting, title: e.target.value})} />
@@ -1279,7 +1146,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-gray-50 font-medium text-gray-600 flex items-center gap-2">
                   <CalendarDays size={18} /> Meeting Log
@@ -1305,7 +1171,6 @@ ${weeklySummary}`
                             </button>
                           </div>
                         </div>
-                        
                         {isEditing && (
                           <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 animate-in">
                             <textarea placeholder="Meeting Notes..." className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none resize-none h-20 text-sm" value={editMeetingForm.notes} onChange={e => setEditMeetingForm({...editMeetingForm, notes: e.target.value})} />
@@ -1318,7 +1183,6 @@ ${weeklySummary}`
                             </div>
                           </div>
                         )}
-
                         {!isEditing && (meeting.notes || (meeting.actionItems && meeting.actionItems.length > 0)) && (
                           <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                             {meeting.notes && (
@@ -1363,7 +1227,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredTools.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No tools found.</div>}
                 {filteredTools.map(tool => (
@@ -1394,7 +1257,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredNotes.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No notes found.</div>}
                 {filteredNotes.map(note => (
@@ -1422,7 +1284,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredDocuments.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No documents found.</div>}
                 {filteredDocuments.map(doc => (
@@ -1456,7 +1317,6 @@ ${weeklySummary}`
                   </button>
                 </div>
               </form>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredTeamLove.length === 0 && <div className="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-dashed">No team love found.</div>}
                 {filteredTeamLove.map(love => (
@@ -1473,7 +1333,6 @@ ${weeklySummary}`
             </div>
           );
 
-          // --- NEW: Render saved weekly summaries tab ---
           const renderWeeklySummaries = () => (
             <div className="space-y-4 animate-in">
               {savedSummaries.length === 0 && (
@@ -1490,48 +1349,31 @@ ${weeklySummary}`
                       <p className="font-bold text-gray-800 text-base">
                         Week of {new Date(s.weekOf + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Saved on {new Date(s.dateSaved).toLocaleString()}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">Saved on {new Date(s.dateSaved).toLocaleString()}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-4">
-                      <button
-                        onClick={() => copyToClipboard(s.content)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-                      >
+                      <button onClick={() => copyToClipboard(s.content)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
                         <Copy size={14} /> Copy
                       </button>
-                      <button
-                        onClick={() => deleteSavedSummary(s.id)}
-                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1.5"
-                      >
+                      <button onClick={() => deleteSavedSummary(s.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1.5">
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
-                  <textarea
-                    readOnly
-                    value={s.content}
-                    className="w-full h-52 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"
-                  />
+                  <textarea readOnly value={s.content} className="w-full h-52 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none" />
                 </div>
               ))}
             </div>
           );
 
           const renderArchive = () => {
-            // Build list of unique assignees in the archive
             const assignees = ['All', ...Array.from(new Set(archivedTasks.map(t => t.assignee || 'Me').filter(Boolean)))];
-
-            // Apply filters
             const filtered = archivedTasks.filter(t => {
               const matchesGoal = archiveFilter.goal === 'All' || t.goal === archiveFilter.goal || (!t.goal && archiveFilter.goal === 'Unassigned');
               const matchesAssignee = archiveFilter.assignee === 'All' || (t.assignee || 'Me') === archiveFilter.assignee;
               const matchesSearch = !archiveFilter.search || t.title.toLowerCase().includes(archiveFilter.search.toLowerCase());
               return matchesGoal && matchesAssignee && matchesSearch;
             });
-
-            // Group by weekArchived, sorted newest first
             const groups = {};
             filtered.forEach(t => {
               const week = t.weekArchived || 'Unknown Week';
@@ -1543,14 +1385,10 @@ ${weeklySummary}`
               if (b === 'Unknown Week') return -1;
               return new Date(b) - new Date(a);
             });
-
-            // Stats
             const totalHours = (archivedTasks.reduce((acc, t) => acc + (Number(t.duration) || 0), 0) / 60).toFixed(1);
 
             return (
               <div className="space-y-6 animate-in">
-
-                {/* Summary bar */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm text-center">
                     <p className="text-3xl font-bold text-slate-800">{archivedTasks.length}</p>
@@ -1565,49 +1403,26 @@ ${weeklySummary}`
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Weeks on Record</p>
                   </div>
                 </div>
-
-                {/* Filters */}
                 <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center">
                   <Filter size={16} className="text-slate-400 shrink-0" />
                   <div className="relative flex-1 w-full">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search size={14} className="text-slate-400" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Search archived tasks..."
-                      className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 text-sm"
-                      value={archiveFilter.search}
-                      onChange={e => setArchiveFilter(f => ({ ...f, search: e.target.value }))}
-                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search size={14} className="text-slate-400" /></div>
+                    <input type="text" placeholder="Search archived tasks..." className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-400 text-sm" value={archiveFilter.search} onChange={e => setArchiveFilter(f => ({ ...f, search: e.target.value }))} />
                   </div>
-                  <select
-                    className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto"
-                    value={archiveFilter.goal}
-                    onChange={e => setArchiveFilter(f => ({ ...f, goal: e.target.value }))}
-                  >
+                  <select className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto" value={archiveFilter.goal} onChange={e => setArchiveFilter(f => ({ ...f, goal: e.target.value }))}>
                     <option value="All">All Goals</option>
                     <option value="Unassigned">Unassigned</option>
                     {STRATEGIC_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
-                  <select
-                    className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto"
-                    value={archiveFilter.assignee}
-                    onChange={e => setArchiveFilter(f => ({ ...f, assignee: e.target.value }))}
-                  >
+                  <select className="p-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 text-slate-700 w-full md:w-auto" value={archiveFilter.assignee} onChange={e => setArchiveFilter(f => ({ ...f, assignee: e.target.value }))}>
                     {assignees.map(a => <option key={a} value={a}>{a === 'All' ? 'All Assignees' : a}</option>)}
                   </select>
                   {(archiveFilter.goal !== 'All' || archiveFilter.assignee !== 'All' || archiveFilter.search) && (
-                    <button
-                      onClick={() => setArchiveFilter({ goal: 'All', assignee: 'All', search: '' })}
-                      className="text-xs text-slate-500 hover:text-red-500 font-medium px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 transition-colors whitespace-nowrap"
-                    >
+                    <button onClick={() => setArchiveFilter({ goal: 'All', assignee: 'All', search: '' })} className="text-xs text-slate-500 hover:text-red-500 font-medium px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 transition-colors whitespace-nowrap">
                       Clear filters
                     </button>
                   )}
                 </div>
-
-                {/* Empty state */}
                 {archivedTasks.length === 0 && (
                   <div className="p-12 text-center bg-white rounded-xl border border-dashed border-gray-200">
                     <CheckCircle2 size={32} className="text-gray-300 mx-auto mb-3" />
@@ -1615,30 +1430,23 @@ ${weeklySummary}`
                     <p className="text-gray-400 text-sm mt-1">Tasks marked Done are archived automatically every Monday.</p>
                   </div>
                 )}
-
                 {filtered.length === 0 && archivedTasks.length > 0 && (
                   <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200">
                     <p className="text-gray-500">No tasks match your filters.</p>
                   </div>
                 )}
-
-                {/* Grouped weeks */}
                 {sortedWeeks.map(week => {
                   const weekTasks = groups[week];
                   const weekHours = (weekTasks.reduce((acc, t) => acc + (Number(t.duration) || 0), 0) / 60).toFixed(1);
                   const weekLabel = week === 'Unknown Week' ? 'Unknown Week' :
                     new Date(week + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-                  // Goal breakdown for this week
                   const goalBreakdown = {};
                   weekTasks.forEach(t => {
                     const g = t.goal || 'Unassigned';
                     goalBreakdown[g] = (goalBreakdown[g] || 0) + 1;
                   });
-
                   return (
                     <div key={week} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                      {/* Week header */}
                       <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <div>
                           <p className="font-bold text-slate-800 text-sm">Week of {weekLabel}</p>
@@ -1656,8 +1464,6 @@ ${weeklySummary}`
                           <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">{weekHours}h logged</span>
                         </div>
                       </div>
-
-                      {/* Task rows */}
                       <ul className="divide-y divide-gray-50">
                         {weekTasks.map(task => (
                           <li key={task.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors">
@@ -1676,9 +1482,7 @@ ${weeklySummary}`
                                   </span>
                                 )}
                                 {task.assignee && task.assignee !== 'Me' && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-pink-50 text-pink-600">
-                                    {task.assignee}
-                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-pink-50 text-pink-600">{task.assignee}</span>
                                 )}
                                 {task.dateCompleted && (
                                   <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
@@ -1703,12 +1507,11 @@ ${weeklySummary}`
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
                         <Download size={20} className="text-blue-500" /> Export Backup
                     </h3>
-                    <p className="text-sm text-gray-500 mb-4">Download a complete backup of the app data as a JSON file. Use this to transfer data to a new computer or browser.</p>
+                    <p className="text-sm text-gray-500 mb-4">Download a complete backup of the app data as a JSON file.</p>
                     <button onClick={exportData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 font-medium transition-colors text-sm">
                         <Download size={16} /> Download Backup (.json)
                     </button>
                 </div>
-                
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
                         <Upload size={20} className="text-amber-500" /> Import Backup
@@ -1716,7 +1519,6 @@ ${weeklySummary}`
                     <p className="text-sm text-gray-500 mb-4">Upload a previously downloaded backup file. <strong>Warning:</strong> This will overwrite all of your current data.</p>
                     <input type="file" accept=".json" onChange={importData} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer"/>
                 </div>
-
                 <div className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm mt-8">
                     <h3 className="text-lg font-bold text-red-800 flex items-center gap-2 mb-2">
                         <Trash2 size={20} className="text-red-500" /> Danger Zone
@@ -1761,10 +1563,7 @@ ${weeklySummary}`
                     return (
                       <button
                         key={item.id}
-                        onClick={() => {
-                            setActiveTab(item.id);
-                            setSearchQuery(''); // Clear search on tab switch
-                        }}
+                        onClick={() => { setActiveTab(item.id); setSearchQuery(''); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${isActive ? 'bg-slate-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100 hover:text-slate-900'}`}
                       >
                         <Icon size={18} className={isActive ? 'text-blue-400' : 'text-gray-400'} />
@@ -1786,8 +1585,6 @@ ${weeklySummary}`
               </aside>
 
               <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen relative">
-                
-                {/* Global Header with Search */}
                 <header className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900 capitalize flex items-center gap-3">
@@ -1808,8 +1605,6 @@ ${weeklySummary}`
                         {activeTab === 'settings' && "Manage your local data backups."}
                     </p>
                   </div>
-                  
-                  {/* Global Search Bar */}
                   {activeTab !== 'settings' && activeTab !== 'dashboard' && activeTab !== 'insights' && activeTab !== 'weekly-summaries' && activeTab !== 'archive' && (
                       <div className="relative w-full md:w-64">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1837,7 +1632,6 @@ ${weeklySummary}`
                                 {capacityStats.remainingHours}h Remaining
                             </span>
                             </div>
-                            
                             <div className="w-full bg-gray-100 rounded-full h-6 mb-4 flex overflow-hidden shadow-inner">
                             <div className="h-6 transition-all border-r border-white/20 last:border-0 flex items-center justify-center text-[10px] text-white font-bold" style={{ width: `${(capacityStats.meetingHours / 40) * 100}%`, backgroundColor: GOAL_COLORS['Meetings'] }} title={`Meetings: ${capacityStats.meetingHours}h`}>
                                 {capacityStats.meetingHours > 1 && 'Mtg'}
@@ -1849,7 +1643,6 @@ ${weeklySummary}`
                                 );
                             })}
                             </div>
-
                             <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium bg-gray-50 p-4 rounded-lg">
                             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS['Meetings']}}></span> Meetings: {capacityStats.meetingHours}h</span>
                             {Object.entries(capacityStats.tasksByGoal).map(([goal, hours]) => {
@@ -1884,25 +1677,10 @@ ${weeklySummary}`
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileText size={20} className="text-gray-500" /> Auto-Generated Weekly Summary</h3>
                                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                                    <button
-                                        onClick={generateAiSummary}
-                                        disabled={aiSummaryLoading}
-                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-all text-sm font-medium shadow-sm"
-                                    >
-                                        {aiSummaryLoading ? (
-                                            <>
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                                                </svg>
-                                                Writing...
-                                            </>
-                                        ) : '✨ AI Summary'}
+                                    <button onClick={generateAiSummary} disabled={aiSummaryLoading} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-all text-sm font-medium shadow-sm">
+                                        {aiSummaryLoading ? (<><svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>Writing...</>) : '✨ AI Summary'}
                                     </button>
-                                    <button
-                                        onClick={handleSaveSummary}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
-                                    >
+                                    <button onClick={handleSaveSummary} className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium">
                                         <History size={16} /> Save Summary
                                     </button>
                                     <button onClick={() => copyToClipboard(weeklySummary)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm font-medium">
@@ -1911,14 +1689,10 @@ ${weeklySummary}`
                                 </div>
                             </div>
                             <textarea readOnly value={weeklySummary} className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-700 resize-none focus:outline-none"/>
-
-                            {/* AI-generated narrative summary */}
                             {(aiSummary || aiSummaryLoading) && (
                                 <div className="mt-4 pt-4 border-t border-gray-100 animate-in">
                                     <div className="flex justify-between items-center mb-3">
-                                        <h4 className="text-sm font-bold text-violet-700 flex items-center gap-2">
-                                            <span className="text-base">✨</span> AI-Polished Narrative
-                                        </h4>
+                                        <h4 className="text-sm font-bold text-violet-700 flex items-center gap-2"><span className="text-base">✨</span> AI-Polished Narrative</h4>
                                         {aiSummary && !aiSummaryLoading && (
                                             <button onClick={() => copyToClipboard(aiSummary)} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-lg text-sm font-medium transition-colors">
                                                 <Copy size={13} /> Copy
@@ -1927,16 +1701,11 @@ ${weeklySummary}`
                                     </div>
                                     {aiSummaryLoading ? (
                                         <div className="p-6 bg-violet-50 rounded-lg border border-violet-100 flex items-center justify-center gap-3 text-violet-600 text-sm font-medium">
-                                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                                            </svg>
+                                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
                                             Generating polished summary...
                                         </div>
                                     ) : (
-                                        <div className="p-5 bg-violet-50 border border-violet-100 rounded-lg text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                                            {aiSummary}
-                                        </div>
+                                        <div className="p-5 bg-violet-50 border border-violet-100 rounded-lg text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{aiSummary}</div>
                                     )}
                                 </div>
                             )}
@@ -1946,8 +1715,78 @@ ${weeklySummary}`
 
                 {activeTab === 'insights' && (
                     <div className="space-y-6 animate-in">
+
+                        {/* ---- WEEKLY GOAL TREND CHART (always visible) ---- */}
                         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4"><Target size={20} className="text-indigo-500" /> Time by Strategic Goal</h3>
+                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-1">
+                            <Activity size={20} className="text-slate-500" /> Weekly Hours by Goal
+                          </h3>
+                          <p className="text-xs text-slate-400 mb-6">
+                            Hours logged on completed tasks, grouped by the week they were finished. Includes archived tasks.
+                          </p>
+
+                          {weeklyGoalTrend.length === 0 ? (
+                            <div className="h-64 flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center px-6">
+                              <Activity size={28} className="text-slate-300 mb-3" />
+                              <p className="text-slate-500 font-medium text-sm">No data yet</p>
+                              <p className="text-slate-400 text-xs mt-1 max-w-xs">
+                                Complete tasks that have a <strong>Goal</strong> and a <strong>Duration</strong> set — they'll appear here grouped by week.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="h-80 w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={weeklyGoalTrend} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dx={-10} unit="h" />
+                                  <Tooltip
+                                    contentStyle={{borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)', fontSize: '13px'}}
+                                    formatter={(value, name) => [`${value}h`, name]}
+                                    labelStyle={{fontWeight: '700', color: '#1e293b', marginBottom: '4px'}}
+                                  />
+                                  <Legend
+                                    iconType="circle"
+                                    iconSize={8}
+                                    wrapperStyle={{fontSize: '12px', paddingTop: '20px'}}
+                                  />
+                                  {STRATEGIC_GOALS.map(goal => (
+                                    <Line
+                                      key={goal}
+                                      type="monotone"
+                                      dataKey={goal}
+                                      stroke={GOAL_COLORS[goal]}
+                                      strokeWidth={2.5}
+                                      dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                                      activeDot={{ r: 6, strokeWidth: 0 }}
+                                      connectNulls={false}
+                                    />
+                                  ))}
+                                  <Line
+                                    key="Unassigned"
+                                    type="monotone"
+                                    dataKey="Unassigned"
+                                    stroke={GOAL_COLORS['Unassigned']}
+                                    strokeWidth={2}
+                                    strokeDasharray="5 5"
+                                    dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
+                                    activeDot={{ r: 5, strokeWidth: 0 }}
+                                    connectNulls={false}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ---- TIME BY STRATEGIC GOAL ---- */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-1">
+                            <Target size={20} className="text-indigo-500" /> Time by Strategic Goal
+                          </h3>
+                          <p className="text-xs text-slate-400 mb-5">
+                            Spent hours include all completed tasks (active + archived). Planned hours are from active incomplete tasks only.
+                          </p>
                           {goalStats.length === 0 ? (
                             <div className="p-4 text-center text-gray-500 text-sm bg-gray-50 rounded-lg border border-gray-100 border-dashed">Assign durations and goals to tasks to see insights here!</div>
                           ) : (
@@ -1959,7 +1798,10 @@ ${weeklySummary}`
                                 return (
                                   <div key={stat.goal}>
                                     <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
-                                      <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}}></span>{stat.goal} <span className="text-gray-400 font-normal">({stat.count} tasks)</span></span>
+                                      <span className="flex items-center gap-2">
+                                        <span className="w-3 h-3 rounded-full" style={{backgroundColor: GOAL_COLORS[stat.goal] || GOAL_COLORS['Unassigned']}}></span>
+                                        {stat.goal} <span className="text-gray-400 font-normal">({stat.count} tasks)</span>
+                                      </span>
                                       <span>{stat.totalHours}h Total</span>
                                     </div>
                                     <div className="w-full bg-gray-100 rounded-full h-2 mb-2 flex overflow-hidden">
@@ -1980,26 +1822,8 @@ ${weeklySummary}`
                           )}
                         </div>
 
-                        {weeklyGoalTrend.length > 0 && (
-                          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-4">
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6"><Activity size={20} className="text-slate-500" /> Goal Trend (Completed Hours)</h3>
-                            <div className="h-80 w-full">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={weeklyGoalTrend} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dx={-10} />
-                                  <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} itemStyle={{fontSize: '14px', fontWeight: '500'}}/>
-                                  <Legend iconType="circle" wrapperStyle={{fontSize: '12px', paddingTop: '20px'}} />
-                                  {STRATEGIC_GOALS.map(goal => <Line key={goal} type="monotone" dataKey={goal} stroke={GOAL_COLORS[goal]} strokeWidth={3} dot={{r: 4, strokeWidth: 2}} activeDot={{r: 6}} /> )}
-                                  <Line key="Unassigned" type="monotone" dataKey="Unassigned" stroke={GOAL_COLORS['Unassigned']} strokeWidth={2} strokeDasharray="5 5" />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </div>
-                        )}
-
-                         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 p-6 rounded-xl shadow-md text-white">
+                        {/* ---- QUARTERLY REVIEW ---- */}
+                        <div className="bg-gradient-to-r from-blue-900 to-indigo-900 p-6 rounded-xl shadow-md text-white">
                             <div className="flex justify-between items-center mb-4">
                                 <div>
                                     <h3 className="text-lg font-bold flex items-center gap-2"><Award size={20} className="text-yellow-400"/> Quarterly Performance Review Generator</h3>
